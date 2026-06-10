@@ -7,6 +7,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraftforge.oredict.OreDictionary;
 import net.minecraftforge.oredict.ShapedOreRecipe;
 
+import com.dunk.tfc.api.TFCBlocks;
 import com.zerofall.ezstorage.block.BlockCondensedStorage;
 import com.zerofall.ezstorage.block.BlockCraftingBox;
 import com.zerofall.ezstorage.block.BlockHyperStorage;
@@ -71,28 +72,28 @@ public class EZBlocks {
 
     public static void registerRecipes() {
 
-        String t2_1 = OreDictionary.getOres("blockBronze").size() != 0 ? "blockBronze" : "blockIron";
+        String t2_1 = !OreDictionary.getOres("plateBronze").isEmpty() ? "plateBronze" : "plateWroughtIron";
         String t2_2 = t2_1;
 
-        GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(storage_core), "ABA", "BCB", "ABA", 'A', "logWood", 'B', "stickWood", 'C', Blocks.chest));
-        GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(storage_box), "ABA", "BCB", "ABA", 'A', "logWood", 'B', "plankWood", 'C', Blocks.chest));
-        GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(condensed_storage_box), "ACA", "EBE", "DCD", 'A', t2_1, 'B', storage_box, 'C', "ingotGold", 'D', t2_2, 'E', Blocks.chest));
-        GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(hyper_storage_box), "ABA", "ACA", "AAA", 'A', Blocks.obsidian, 'B', Items.nether_star, 'C', condensed_storage_box));
-        GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(inventory_proxy), " A ", " B ", " C ", 'A', Blocks.hopper, 'B', Blocks.piston, 'C', "blockQuartz"));
-        GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(crafting_box), " A ", " B ", " C ", 'A', Items.ender_pearl, 'B', Blocks.crafting_table, 'C', "gemDiamond"));
+        GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(storage_core), "ABA", "BCB", "ABA", 'A', "logWood", 'B', "stickWood", 'C', "chestWood"));
+        GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(storage_box), "ABA", "CDC", "ABA", 'A', "logWood", 'B', "plateCopper", 'C', "plankWood", 'D', "chestWood"));
+        GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(condensed_storage_box), "ACA", "EBE", "DCD", 'A', t2_1, 'B', storage_box, 'C', "ingotGold", 'D', t2_2, 'E', "chestWood"));
+        GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(hyper_storage_box), "ABA", "ACA", "ABA", 'A', "plateSteel", 'B', "gemDiamond", 'C', condensed_storage_box));
+        GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(inventory_proxy), " A ", " B ", " C ", 'A', TFCBlocks.hopper, 'B', Blocks.piston, 'C', "plateWroughtIron"));
+        GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(crafting_box), " A ", " B ", " C ", 'A', Items.ender_pearl, 'B', "craftingTableWood", 'C', "gemDiamond"));
         GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(storage_panel), "ABA", "BCB", "ABA", 'A', "logWood", 'B', "stickWood", 'C', "plankWood"));
         
         if (EZConfiguration.experimentalContent) {
             GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(storage_cable, 16), "ABA", "BBB", "ABA", 'A', "logWood", 'B', "stickWood"));
-            GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(storage_adapter), " A ", "BCB", " A ", 'A', "ingotIron", 'B', Blocks.chest, 'C', Items.comparator));
+            GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(storage_adapter), " A ", "BCB", " A ", 'A', "plateCopper", 'B', "chestWood", 'C', "gemChipped"));
         }
 
-        if (OreDictionary.getOres("blockDarkSteel").size() != 0) {
-            GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(hyper_storage_box), "ABA", "BCB", "ABA", 'A', "blockDarkSteel", 'B', Blocks.obsidian, 'C', condensed_storage_box));
+        if (!OreDictionary.getOres("blockDarkSteel").isEmpty()) {
+            GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(hyper_storage_box), "ABA", "BCB", "ABA", 'A', "blockDarkSteel", 'B', "plateSteel", 'C', condensed_storage_box));
         }
 
-        if (OreDictionary.getOres("blockNetherite").size() != 0) {
-            GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(hyper_storage_box), "ABA", "BCB", "ABA", 'A', "blockNetherite", 'B', Blocks.obsidian, 'C', condensed_storage_box));
+        if (!OreDictionary.getOres("blockNetherite").isEmpty()) {
+            GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(hyper_storage_box), "ABA", "BCB", "ABA", 'A', "blockNetherite", 'B', "plateSteel", 'C', condensed_storage_box));
         }
     }
 }

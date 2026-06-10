@@ -28,7 +28,7 @@ public class EZItems {
     }
 
     public static void registerRecipes() {
-        GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(portable_storage_panel), "ABA", "BCB", "DBD", 'A', Blocks.redstone_torch, 'B', "slabWood", 'C', EZBlocks.storage_core, 'D', "ingotGold"));
+        GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(portable_storage_panel), "ABA", "BCB", "DBD", 'A', Blocks.redstone_torch, 'B', "plankWood", 'C', EZBlocks.storage_core, 'D', "ingotGold"));
         GameRegistry.addRecipe(new PortableStoragePanelUpgradeRecipe());
     }
 }
