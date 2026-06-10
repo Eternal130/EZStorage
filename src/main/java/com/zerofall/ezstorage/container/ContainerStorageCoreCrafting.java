@@ -17,6 +17,10 @@ import net.minecraft.item.crafting.CraftingManager;
 import net.minecraft.world.World;
 import net.minecraftforge.oredict.OreDictionary;
 
+import com.dunk.tfc.Food.ItemFoodTFC;
+import com.dunk.tfc.Handlers.FoodCraftingHandler;
+import com.dunk.tfc.api.Crafting.CraftingManagerTFC;
+import com.dunk.tfc.api.Interfaces.IFood;
 import com.zerofall.ezstorage.storage.IStorageProvider;
 import com.zerofall.ezstorage.tileentity.TileEntityStorageCore;
 import com.zerofall.ezstorage.util.EZInventory;
@@ -27,6 +31,7 @@ public class ContainerStorageCoreCrafting extends ContainerStorageCore {
     public InventoryCrafting craftMatrix = new InventoryCrafting(this, 3, 3);
     public IInventory craftResult = new InventoryCraftResult();
     private World worldObj;
+    private EntityPlayer thePlayer;
 
     public ContainerStorageCoreCrafting(EntityPlayer player, World world, EZInventory inventory) {
         this(player, world);
@@ -54,6 +59,7 @@ public class ContainerStorageCoreCrafting extends ContainerStorageCore {
 
     public ContainerStorageCoreCrafting(EntityPlayer player, World world) {
         super(player);
+        this.thePlayer = player;
         this.worldObj = world;
         this.addSlotToContainer(new SlotCrafting(player, this.craftMatrix, this.craftResult, 0, 116, 132));
         int i;
@@ -69,10 +75,30 @@ public class ContainerStorageCoreCrafting extends ContainerStorageCore {
     }
 
     public void onCraftMatrixChanged(IInventory inventoryIn) {
-        this.craftResult.setInventorySlotContents(
-            0,
-            CraftingManager.getInstance()
-                .findMatchingRecipe(this.craftMatrix, this.worldObj));
+        // Use TFCP CraftingManager first, then fall back to vanilla
+        ItemStack result = null;
+
+        if (coreTileEntity != null) {
+            result = CraftingManagerTFC.getInstance()
+                .findMatchingRecipe(
+                    this.craftMatrix,
+                    coreTileEntity.xCoord,
+                    coreTileEntity.yCoord,
+                    coreTileEntity.zCoord,
+                    worldObj);
+        }
+
+        if (result == null) {
+            result = CraftingManager.getInstance()
+                .findMatchingRecipe(this.craftMatrix, this.worldObj);
+        }
+
+        this.craftResult.setInventorySlotContents(0, result);
+
+        // Apply TFCP food post-processing to the output slot
+        if (result != null && result.getItem() instanceof ItemFoodTFC) {
+            FoodCraftingHandler.updateOutput(thePlayer, result, this.craftMatrix);
+        }
     }
 
     // Shift clicking
@@ -81,6 +107,12 @@ public class ContainerStorageCoreCrafting extends ContainerStorageCore {
         Slot slotObject = (Slot) inventorySlots.get(index);
         if (slotObject != null && slotObject.getHasStack()) {
             if (slotObject instanceof SlotCrafting) {
+                // Pre-craft hook for TFCP food
+                ItemStack craftStack = slotObject.getStack();
+                if (craftStack != null) {
+                    FoodCraftingHandler.preCraft(playerIn, craftStack, this.craftMatrix);
+                }
+
                 boolean hasChanges = false;
                 ItemStack[][] recipe = new ItemStack[9][];
                 for (int i = 0; i < 9; i++) {
@@ -183,6 +215,13 @@ public class ContainerStorageCoreCrafting extends ContainerStorageCore {
 
             ItemStack stackInSlot = slot.getStack();
             if (stackInSlot != null) {
+                // TFCP uses stackSize > 1 as a marker to keep items in the grid (tools, split food)
+                // Skip these slots to avoid conflicts
+                if (isTfcpRetainedItem(stackInSlot)) {
+                    inventoryItemStacks.set(craftingSlotsStartIndex + j, null);
+                    continue;
+                }
+
                 if (getMatchingItemStackForRecipe(recipeItems, stackInSlot) != null) {
                     // Already has a valid item — force GUI update
                     inventoryItemStacks.set(craftingSlotsStartIndex + j, null);
@@ -303,6 +342,20 @@ public class ContainerStorageCoreCrafting extends ContainerStorageCore {
         }
 
         return hasChanges;
+    }
+
+    /**
+     * Check if an item in the crafting grid is being retained by TFCP's
+     * stackSize++ mechanism. TFCP uses stackSize > 1 (up to 2) to mark items
+     * that should stay in the grid after crafting (tools like knives, split
+     * food portions).
+     */
+    private static boolean isTfcpRetainedItem(ItemStack stack) {
+        if (stack == null) return false;
+        if (stack.stackSize > 1) {
+            return stack.getItem() instanceof IFood;
+        }
+        return false;
     }
 
     private ItemStack getMatchingItemFromStorage(ItemStack recipeItem) {
