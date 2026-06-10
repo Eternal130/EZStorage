@@ -43,6 +43,7 @@ dependencies {
     devOnlyNonPublishable(rfg.deobf("curse.maven:et-futurum-requiem-441392:5873837")) { transitive = false }
     devOnlyNonPublishable(rfg.deobf("curse.maven:crafting-tweaks-233071:2457094")) { transitive = false }
     devOnlyNonPublishable(project.files("libs/BaublesExpanded-2.0.3-dev.jar"))
+    devOnlyNonPublishable(rfg.deobf(project.files("libs/terrafirmacraftplus-9415e64-master+9415e64854-dirty.jar")))
     runtimeOnlyNonPublishable("com.github.GTNewHorizons:EnderIO:2.10.27:dev")
     runtimeOnlyNonPublishable rfg.deobf("curse.maven:cofh-core-69162:2388751")
 }
