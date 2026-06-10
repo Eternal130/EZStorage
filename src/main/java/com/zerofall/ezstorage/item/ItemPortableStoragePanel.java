@@ -194,10 +194,13 @@ public class ItemPortableStoragePanel extends EZItem implements IBauble, IBauble
                 tooltip.add(StatCollector.translateToLocal("hud.msg.ezstorage.portable.upgrades"));
                 final PortableStoragePanelTier nextTier = PortableStoragePanelTier.getNextTier(tier);
                 if (nextTier != null) {
+                    ItemStack upgradeItem = PortableStoragePanelUpgradeRecipe.getUpgradeItemStack(nextTier);
+                    String upgradeName = upgradeItem != null ? upgradeItem.getItem()
+                        .getItemStackDisplayName(upgradeItem) : "???";
                     tooltip.add("  - " + StatCollector.translateToLocalFormatted("hud.msg.ezstorage.portable.upgrade.nexttier",
                         panel.getItemStackDisplayName(null),
                         Blocks.redstone_block.getLocalizedName(),
-                        PortableStoragePanelUpgradeRecipe.getUpgradeItem(nextTier).getItemStackDisplayName(null)));
+                        upgradeName));
                 }
                 if (!hasCrafting) {
                     tooltip.add("  - " + StatCollector.translateToLocalFormatted("hud.msg.ezstorage.portable.upgrade.crafting",

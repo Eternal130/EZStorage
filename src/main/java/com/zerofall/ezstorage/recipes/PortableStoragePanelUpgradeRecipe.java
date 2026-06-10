@@ -9,6 +9,7 @@ import net.minecraft.item.ItemBlock;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.crafting.IRecipe;
 import net.minecraft.world.World;
+import net.minecraftforge.oredict.OreDictionary;
 
 import com.zerofall.ezstorage.enums.PortableStoragePanelTier;
 import com.zerofall.ezstorage.init.EZBlocks;
@@ -28,7 +29,6 @@ public class PortableStoragePanelUpgradeRecipe implements IRecipe {
         boolean hasCraftingUpgrade = false;
         PortableStoragePanelTier tier = null;
         PortableStoragePanelTier nextTier = null;
-        Item upgradeItem = null;
 
         for (int i = 0; i < craftingGridInventory.getSizeInventory(); i++) {
             ItemStack slotStack = craftingGridInventory.getStackInSlot(i);
@@ -43,12 +43,9 @@ public class PortableStoragePanelUpgradeRecipe implements IRecipe {
                 panelItem = panel;
                 tier = panelItem.getTier(panelStack);
                 nextTier = PortableStoragePanelTier.getNextTier(tier);
-                if (nextTier != null) {
-                    upgradeItem = getUpgradeItem(nextTier);
-                }
             } else if (!hasRedstone && slotBlock == Blocks.redstone_block) {
                 hasRedstone = true;
-            } else if (!hasUpgradeItem && slotItem == upgradeItem) {
+            } else if (!hasUpgradeItem && nextTier != null && isUpgradeMatch(slotItem, nextTier)) {
                 hasUpgradeItem = true;
             } else if (!hasCraftingUpgrade && slotBlock == EZBlocks.crafting_box) {
                 hasCraftingUpgrade = true;
@@ -90,16 +87,47 @@ public class PortableStoragePanelUpgradeRecipe implements IRecipe {
         return result;
     }
 
-    public static Item getUpgradeItem(PortableStoragePanelTier tier) {
+    public static ItemStack getUpgradeItemStack(PortableStoragePanelTier tier) {
         switch (tier) {
             case TIER_2:
-                return Items.ender_pearl;
+                return new ItemStack(Items.ender_pearl);
             case TIER_3:
-                return Items.ender_eye;
+                return new ItemStack(Items.ender_eye);
             case TIER_INFINITY:
-                return Items.nether_star;
+                return getFirstOreDictStack("ingotBlueSteel");
             default:
-                return Items.ender_eye;
+                return null;
         }
+    }
+
+    private static boolean isUpgradeMatch(Item item, PortableStoragePanelTier tier) {
+        switch (tier) {
+            case TIER_2:
+                return item == Items.ender_pearl;
+            case TIER_3:
+                return item == Items.ender_eye;
+            case TIER_INFINITY:
+                return isOreDictMatch(item, "ingotBlueSteel");
+            default:
+                return false;
+        }
+    }
+
+    private static boolean isOreDictMatch(Item item, String oreName) {
+        for (ItemStack oreStack : OreDictionary.getOres(oreName)) {
+            if (oreStack != null && oreStack.getItem() == item) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static ItemStack getFirstOreDictStack(String oreName) {
+        for (ItemStack oreStack : OreDictionary.getOres(oreName)) {
+            if (oreStack != null && oreStack.getItem() != null) {
+                return oreStack.copy();
+            }
+        }
+        return null;
     }
 }
