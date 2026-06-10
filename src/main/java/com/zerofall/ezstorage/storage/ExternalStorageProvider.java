@@ -1,6 +1,7 @@
 package com.zerofall.ezstorage.storage;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import net.minecraft.block.Block;
@@ -22,6 +23,11 @@ public class ExternalStorageProvider implements IStorageProvider {
     // Rebuilt each time getAllItems() is called
     private List<ItemStack> mergedList = new ArrayList<ItemStack>();
     private List<List<Integer>> slotMapping = new ArrayList<List<Integer>>();
+
+    // Cached list of underlying IInventory instances for double-chest support.
+    // We avoid InventoryLargeChest because its isItemValidForSlot() always returns true,
+    // bypassing any item validation in sub-inventories like TFCP's TEChest.
+    private List<IInventory> underlyingInventories;
 
     public ExternalStorageProvider(World world, int x, int y, int z) {
         this.world = world;
@@ -55,17 +61,46 @@ public class ExternalStorageProvider implements IStorageProvider {
                 if (world.getBlock(nx, y, nz) == chestBlock) {
                     TileEntity adjTe = world.getTileEntity(nx, y, nz);
                     if (adjTe instanceof TileEntityChest adjChest) {
+                        // Build a multi-inventory view WITHOUT using InventoryLargeChest,
+                        // because InventoryLargeChest.isItemValidForSlot() always returns true
+                        // in vanilla 1.7.10, bypassing sub-inventory item validation.
                         if (dir[0] == -1 || dir[2] == -1) {
-                            return new InventoryLargeChest("Large Chest", adjChest, chest);
+                            underlyingInventories = Arrays.asList((IInventory) adjChest, chest);
                         } else {
-                            return new InventoryLargeChest("Large Chest", chest, adjChest);
+                            underlyingInventories = Arrays.asList(chest, adjChest);
                         }
+                        return new InventoryLargeChest("Large Chest", chest, adjChest);
                     }
                 }
             }
         }
 
+        underlyingInventories = Arrays.asList((IInventory) te);
         return (IInventory) te;
+    }
+
+    private IInventory getUnderlyingInventory(int globalSlot) {
+        if (underlyingInventories == null) getInventory();
+        if (underlyingInventories == null || underlyingInventories.isEmpty()) return null;
+        if (underlyingInventories.size() == 1) return underlyingInventories.get(0);
+        int offset = 0;
+        for (IInventory inv : underlyingInventories) {
+            int size = inv.getSizeInventory();
+            if (globalSlot < offset + size) return inv;
+            offset += size;
+        }
+        return underlyingInventories.get(underlyingInventories.size() - 1);
+    }
+
+    private int toLocalSlot(int globalSlot) {
+        if (underlyingInventories == null || underlyingInventories.size() <= 1) return globalSlot;
+        int offset = 0;
+        for (IInventory inv : underlyingInventories) {
+            int size = inv.getSizeInventory();
+            if (globalSlot < offset + size) return globalSlot - offset;
+            offset += size;
+        }
+        return globalSlot;
     }
 
     private int[] getAccessibleSlots(IInventory inv) {
@@ -84,16 +119,24 @@ public class ExternalStorageProvider implements IStorageProvider {
 
     private boolean canInsert(IInventory inv, int slot, ItemStack stack) {
         if (inv instanceof ISidedInventory) {
-            // Check any side that includes this slot
             for (int side = 0; side < 6; side++) {
                 int[] accessible = ((ISidedInventory) inv).getAccessibleSlotsFromSide(side);
                 for (int s : accessible) {
                     if (s == slot) {
-                        return ((ISidedInventory) inv).canInsertItem(slot, stack, side);
+                        if (!((ISidedInventory) inv).canInsertItem(slot, stack, side)) return false;
+                        IInventory underlying = getUnderlyingInventory(slot);
+                        if (underlying != null && underlying != inv) {
+                            return underlying.isItemValidForSlot(toLocalSlot(slot), stack);
+                        }
+                        return inv.isItemValidForSlot(slot, stack);
                     }
                 }
             }
             return false;
+        }
+        IInventory underlying = getUnderlyingInventory(slot);
+        if (underlying != null && underlying != inv) {
+            return underlying.isItemValidForSlot(toLocalSlot(slot), stack);
         }
         return inv.isItemValidForSlot(slot, stack);
     }
