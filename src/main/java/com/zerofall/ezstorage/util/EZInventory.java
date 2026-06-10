@@ -4,10 +4,18 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemHoe;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.ItemTool;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 
+import com.dunk.tfc.Items.Tools.ItemTerraTool;
+import com.dunk.tfc.Items.Tools.ItemWeapon;
+import com.dunk.tfc.api.Enums.EnumSize;
+import com.dunk.tfc.api.Interfaces.IFood;
+import com.dunk.tfc.api.Interfaces.ISize;
 import com.zerofall.ezstorage.EZStorage;
 import com.zerofall.ezstorage.configuration.EZConfiguration;
 
@@ -37,6 +45,9 @@ public class EZInventory {
     }
 
     public ItemStack input(ItemStack itemStack) {
+        if (!isItemAllowed(itemStack)) {
+            return itemStack;
+        }
         // Inventory is full
         if (getTotalCount() >= maxItems) {
             return itemStack;
@@ -50,6 +61,9 @@ public class EZInventory {
     }
 
     public ItemStack simulateInput(ItemStack itemStack) {
+        if (!isItemAllowed(itemStack)) {
+            return itemStack;
+        }
         if (getTotalCount() >= maxItems) {
             return itemStack;
         }
@@ -310,5 +324,30 @@ public class EZInventory {
                 }
             }
         }
+    }
+
+    private static final EnumSize MAX_ALLOWED_SIZE = EnumSize.LARGE;
+
+    public static boolean isItemAllowed(ItemStack itemStack) {
+        if (itemStack == null) return true;
+        Item item = itemStack.getItem();
+
+        if (item instanceof IFood) return false;
+
+        if ((item instanceof ItemTool || item instanceof ItemTerraTool
+            || item instanceof ItemWeapon
+            || item instanceof ItemHoe) && item instanceof ISize
+            && ((ISize) item).getSize(itemStack).stackSize < EnumSize.SMALL.stackSize) {
+            return false;
+        }
+
+        if (item instanceof ISize) {
+            EnumSize itemSize = ((ISize) item).getSize(itemStack);
+            if (itemSize.stackSize > MAX_ALLOWED_SIZE.stackSize) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }
