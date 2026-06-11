@@ -668,11 +668,11 @@ public class GuiStorageCore extends GuiContainer {
 
         if (forceFullUpdate || !GuiScreen.isShiftKeyDown()) {
             filteredList.clear();
-            filterItems(searchText, getInventory().inventory);
+            filterItems(searchText, getInventory().getAllItems());
             sortFilteredList();
             needFullUpdate = false;
         } else {
-            List<ItemStack> inventoryItems = getInventory().inventory;
+            List<ItemStack> inventoryItems = getInventory().getAllItems();
 
             Map<String, ItemStack> inventoryMap = new HashMap<String, ItemStack>();
             for (ItemStack stack : inventoryItems) {

@@ -28,7 +28,8 @@ public class EZStorageMEAdapter extends InventoryAdaptor {
         return new Iterator<ItemSlot>() {
 
             private int index = 0;
-            private List<ItemStack> inventory = teInvProxy.getInventory().inventory;
+            private List<ItemStack> inventory = teInvProxy.getInventory()
+                .getAllItems();
 
             @Override
             public boolean hasNext() {
@@ -117,7 +118,7 @@ public class EZStorageMEAdapter extends InventoryAdaptor {
         if (inventory == null) {
             return false;
         }
-        for (ItemStack itemStack : inventory.inventory) {
+        for (ItemStack itemStack : inventory.getAllItems()) {
             if (itemStack != null) {
                 return true;
             }

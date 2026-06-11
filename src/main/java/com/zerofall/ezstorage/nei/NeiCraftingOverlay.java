@@ -83,7 +83,8 @@ public class NeiCraftingOverlay implements IOverlayHandler {
             EZInventory inventory = coreGui.getInventory();
             if (inventory != null) {
                 invStacks.addAll(
-                    inventory.inventory.stream()
+                    inventory.getAllItems()
+                        .stream()
                         .map(s -> s.copy())
                         .collect(Collectors.toCollection(ArrayList::new)));
             }

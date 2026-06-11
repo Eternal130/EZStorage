@@ -13,7 +13,6 @@ import java.util.UUID;
 
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
-import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.CompressedStreamTools;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.server.MinecraftServer;
@@ -232,7 +231,7 @@ public class EZInventoryManager {
 
         // Construct a temporary inventory with unified data for serialization only
         EZInventory temp = new EZInventory();
-        temp.inventory = new ArrayList<ItemStack>(core.getUnifiedItemList());
+        temp.setItemsFromList(core.getUnifiedItemList());
         temp.maxItems = core.getUnifiedCapacity();
 
         return new MsgStorage(inventory.id, temp);

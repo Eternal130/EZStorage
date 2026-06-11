@@ -24,7 +24,7 @@ public class TileEntityInventoryProxy extends TileEntityMultiblock implements IS
             source = core.getUnifiedItemList();
         } else {
             EZInventory inventory = getInventory();
-            source = inventory != null ? inventory.inventory : new ArrayList<ItemStack>();
+            source = inventory != null ? inventory.getAllItems() : new ArrayList<ItemStack>();
         }
         cachedItems = new ArrayList<ItemStack>(source);
         originalCounts = new int[source.size()];

@@ -377,18 +377,12 @@ public class ContainerStorageCoreCrafting extends ContainerStorageCore {
             }
             return null;
         }
-        for (int i = 0; i < this.inventory.inventory.size(); i++) {
-            ItemStack group = this.inventory.inventory.get(i);
+        List<ItemStack> allItems = this.inventory.getAllItems();
+        for (int i = 0; i < allItems.size(); i++) {
+            ItemStack group = allItems.get(i);
             if (isRecipeItemValid(recipeItem, group)) {
                 if (group.stackSize >= recipeItem.stackSize) {
-                    ItemStack stack = group.copy();
-                    stack.stackSize = recipeItem.stackSize;
-                    group.stackSize -= recipeItem.stackSize;
-                    if (group.stackSize <= 0) {
-                        this.inventory.inventory.remove(i);
-                    }
-                    this.inventory.setHasChanges();
-                    return stack;
+                    return this.inventory.getItemStackAt(i, recipeItem.stackSize);
                 }
             }
         }

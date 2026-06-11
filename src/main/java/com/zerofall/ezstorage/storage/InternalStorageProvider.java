@@ -45,7 +45,7 @@ public class InternalStorageProvider implements IStorageProvider {
 
     @Override
     public List<ItemStack> getAllItems() {
-        return inventory.inventory;
+        return inventory.getAllItems();
     }
 
     @Override
