@@ -5,7 +5,9 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
@@ -16,7 +18,9 @@ import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.client.renderer.RenderHelper;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.Slot;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.MathHelper;
 import net.minecraft.util.ResourceLocation;
@@ -66,6 +70,8 @@ public class GuiStorageCore extends GuiContainer {
     protected static SortMode currentSortMode = SortMode.AMOUNT;
     protected static SortOrder currentSortOrder = SortOrder.DESCENDING;
     protected static boolean saveSearch = false;
+
+    private static final DecimalFormat FORMATTER = new DecimalFormat("#,###");
 
     private static final int BTN_W = 16;
     private static final int BTN_H = 16;
@@ -356,9 +362,8 @@ public class GuiStorageCore extends GuiContainer {
     protected void drawGuiContainerForegroundLayer(int mouseX, int mouseY) {
         super.drawGuiContainerForegroundLayer(mouseX, mouseY);
         handleScrolling(mouseX, mouseY);
-        DecimalFormat formatter = new DecimalFormat("#,###");
-        String totalCount = formatter.format(getInventory().getTotalCount());
-        String max = formatter.format(getInventory().maxItems);
+        String totalCount = FORMATTER.format(getInventory().getTotalCount());
+        String max = FORMATTER.format(getInventory().maxItems);
         String amount = StatCollector.translateToLocalFormatted("hud.msg.ezstorage.amount_count", totalCount, max);
         int stringWidth = fontRendererObj.getStringWidth(amount);
 
@@ -667,30 +672,44 @@ public class GuiStorageCore extends GuiContainer {
             sortFilteredList();
             needFullUpdate = false;
         } else {
+            List<ItemStack> inventoryItems = getInventory().inventory;
+
+            Map<String, ItemStack> inventoryMap = new HashMap<String, ItemStack>();
+            for (ItemStack stack : inventoryItems) {
+                inventoryMap.put(stackKey(stack), stack);
+            }
+            Map<String, ItemStack> filteredMap = new HashMap<String, ItemStack>();
+            for (ItemStack stack : filteredList) {
+                filteredMap.put(stackKey(stack), stack);
+            }
+
             List<ItemStack> listNewStacks = new ArrayList<ItemStack>();
-            for (ItemStack stackSrc : getInventory().inventory) {
-                boolean found = false;
-                for (ItemStack stackDest : filteredList) {
-                    if (EZInventory.stacksEqual(stackDest, stackSrc)) {
-                        stackDest.stackSize = stackSrc.stackSize;
-                        found = true;
-                    }
+            for (ItemStack stackSrc : inventoryItems) {
+                ItemStack stackDest = filteredMap.get(stackKey(stackSrc));
+                if (stackDest != null) {
+                    stackDest.stackSize = stackSrc.stackSize;
+                } else {
+                    listNewStacks.add(stackSrc);
                 }
-                if (!found) listNewStacks.add(stackSrc);
             }
+
             for (ItemStack stackDest : filteredList) {
-                boolean found = false;
-                for (ItemStack stackSrc : getInventory().inventory) {
-                    if (EZInventory.stacksEqual(stackDest, stackSrc)) {
-                        found = true;
-                        break;
-                    }
+                if (!inventoryMap.containsKey(stackKey(stackDest))) {
+                    stackDest.stackSize = 0;
                 }
-                if (!found) stackDest.stackSize = 0;
             }
+
             if (!listNewStacks.isEmpty()) filterItems(searchText, listNewStacks);
             needFullUpdate = true;
         }
+    }
+
+    private static String stackKey(ItemStack stack) {
+        NBTTagCompound tag = stack.getTagCompound();
+        return Item.getIdFromItem(stack.getItem()) + ":"
+            + stack.getItemDamage()
+            + ":"
+            + (tag != null ? tag.hashCode() : 0);
     }
 
     private void sortFilteredList() {
