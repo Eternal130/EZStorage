@@ -49,6 +49,28 @@ public class TileEntityStorageCore extends TileEntity {
     private long lastExternalStateHash = 0;
     private int externalSyncTicks = 0;
 
+    private List<ItemStack> cachedUnifiedList = null;
+    private boolean unifiedListDirty = true;
+
+    @Override
+    public void validate() {
+        super.validate();
+        if (inventoryId != null && !inventoryId.isEmpty()) {
+            EZInventoryManager.registerCore(this);
+        }
+    }
+
+    @Override
+    public void invalidate() {
+        EZInventoryManager.unregisterCore(this);
+        super.invalidate();
+    }
+
+    private void markUnifiedListDirty() {
+        unifiedListDirty = true;
+        cachedUnifiedList = null;
+    }
+
     public EZInventory getInventory() {
         return getInventory(false);
     }
@@ -60,6 +82,7 @@ public class TileEntityStorageCore extends TileEntity {
             if (inventory == null && allowCreate) {
                 inventory = EZInventoryManager.createInventory();
                 inventoryId = inventory.id;
+                EZInventoryManager.registerCore(this);
             }
         }
         return inventory;
@@ -139,6 +162,7 @@ public class TileEntityStorageCore extends TileEntity {
         this.hasCraftBox = false;
         multiblock = new HashSet<BlockRef>();
         initProviders();
+        markUnifiedListDirty();
         BlockRef ref = new BlockRef(this);
         multiblock.add(ref);
         getValidNeighbors(ref, entity);
@@ -219,6 +243,7 @@ public class TileEntityStorageCore extends TileEntity {
         if (inv != null) {
             providers.add(new InternalStorageProvider(inv));
         }
+        markUnifiedListDirty();
     }
 
     /** Get unmodifiable list of providers */
@@ -260,9 +285,13 @@ public class TileEntityStorageCore extends TileEntity {
 
     /**
      * Merged and deduplicated item list across all providers.
-     * Rebuilds from scratch each call (no caching).
+     * Cached with dirty-flag — rebuilds only when storage state changes.
      */
     public List<ItemStack> getUnifiedItemList() {
+        if (!unifiedListDirty && cachedUnifiedList != null) {
+            return new ArrayList<>(cachedUnifiedList);
+        }
+
         List<ItemStack> result = new ArrayList<ItemStack>();
         for (IStorageProvider provider : providers) {
             if (!provider.isValid()) continue;
@@ -282,7 +311,10 @@ public class TileEntityStorageCore extends TileEntity {
                 }
             }
         }
-        return result;
+
+        cachedUnifiedList = result;
+        unifiedListDirty = false;
+        return new ArrayList<>(cachedUnifiedList);
     }
 
     public long getUnifiedTotalCount() {
@@ -306,6 +338,9 @@ public class TileEntityStorageCore extends TileEntity {
     }
 
     public int getUnifiedSlotCount() {
+        if (!unifiedListDirty && cachedUnifiedList != null) {
+            return cachedUnifiedList.size();
+        }
         return getUnifiedItemList().size();
     }
 
@@ -334,6 +369,7 @@ public class TileEntityStorageCore extends TileEntity {
             }
         }
 
+        markUnifiedListDirty();
         return remainder;
     }
 
@@ -371,19 +407,30 @@ public class TileEntityStorageCore extends TileEntity {
         }
         if (toExtract <= 0) return null;
 
-        return unifiedExtractExact(unifiedIndex, toExtract);
+        return unifiedExtractExact(unifiedIndex, toExtract, target);
     }
 
     /**
      * Extract an exact amount of items from the unified view by index.
+     * Delegates to the overloaded version with a null target (will look up by index).
      */
     public ItemStack unifiedExtractExact(int unifiedIndex, int amount) {
+        return unifiedExtractExact(unifiedIndex, amount, null);
+    }
+
+    /**
+     * Extract an exact amount of items from the unified view by index.
+     * If target is provided, skips the unified list lookup for better performance.
+     */
+    public ItemStack unifiedExtractExact(int unifiedIndex, int amount, ItemStack target) {
         if (unifiedIndex < 0 || amount <= 0) return null;
 
-        List<ItemStack> unified = getUnifiedItemList();
-        if (unifiedIndex >= unified.size()) return null;
+        if (target == null) {
+            List<ItemStack> unified = getUnifiedItemList();
+            if (unifiedIndex >= unified.size()) return null;
+            target = unified.get(unifiedIndex);
+        }
 
-        ItemStack target = unified.get(unifiedIndex);
         int toExtract = Math.min(amount, target.stackSize);
         if (toExtract <= 0) return null;
 
@@ -403,7 +450,11 @@ public class TileEntityStorageCore extends TileEntity {
             }
         }
 
-        return result.stackSize > 0 ? result : null;
+        if (result.stackSize > 0) {
+            markUnifiedListDirty();
+            return result;
+        }
+        return null;
     }
 
     private int findItemIndex(IStorageProvider provider, ItemStack target) {
@@ -463,6 +514,7 @@ public class TileEntityStorageCore extends TileEntity {
                     scanMultiblock(null, false);
                 } else if (hash != lastExternalStateHash) {
                     lastExternalStateHash = hash;
+                    markUnifiedListDirty();
                     updateTileEntity();
                 }
             }

@@ -2,13 +2,18 @@ package com.zerofall.ezstorage.storage;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import net.minecraft.block.Block;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.inventory.ISidedInventory;
 import net.minecraft.inventory.InventoryLargeChest;
 import net.minecraft.item.ItemStack;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.tileentity.TileEntityChest;
 import net.minecraft.world.World;
@@ -23,6 +28,17 @@ public class ExternalStorageProvider implements IStorageProvider {
     // Rebuilt each time getAllItems() is called
     private List<ItemStack> mergedList = new ArrayList<ItemStack>();
     private List<List<Integer>> slotMapping = new ArrayList<List<Integer>>();
+
+    // Tick-level cache — avoids redundant rebuilds within the same server tick
+    private List<ItemStack> cachedMergedList = null;
+    private List<List<Integer>> cachedSlotMapping = null;
+    private int lastRebuildTick = -1;
+    private long cachedTotalCount = -1;
+    private int cachedSlotCount = -1;
+
+    // Precomputed slot→sides mapping for ISidedInventory lookup optimization.
+    // Maps each underlying inventory to (slot → Set<side>) for O(1) access checks.
+    private Map<IInventory, Map<Integer, Set<Integer>>> slotToSidesMap = new HashMap<>();
 
     // Cached list of underlying IInventory instances for double-chest support.
     // We avoid InventoryLargeChest because its isItemValidForSlot() always returns true,
@@ -117,19 +133,23 @@ public class ExternalStorageProvider implements IStorageProvider {
         return all;
     }
 
+    private void invalidateTickCache() {
+        lastRebuildTick = -1;
+    }
+
     private boolean canInsert(IInventory inv, int slot, ItemStack stack) {
         if (inv instanceof ISidedInventory) {
-            for (int side = 0; side < 6; side++) {
-                int[] accessible = ((ISidedInventory) inv).getAccessibleSlotsFromSide(side);
-                for (int s : accessible) {
-                    if (s == slot) {
-                        if (!((ISidedInventory) inv).canInsertItem(slot, stack, side)) return false;
-                        IInventory underlying = getUnderlyingInventory(slot);
-                        if (underlying != null && underlying != inv) {
-                            return underlying.isItemValidForSlot(toLocalSlot(slot), stack);
-                        }
-                        return inv.isItemValidForSlot(slot, stack);
+            Map<Integer, Set<Integer>> slotMap = slotToSidesMap.get(inv);
+            if (slotMap == null) return false;
+            Set<Integer> sides = slotMap.get(slot);
+            if (sides == null || sides.isEmpty()) return false;
+            for (int side : sides) {
+                if (((ISidedInventory) inv).canInsertItem(slot, stack, side)) {
+                    IInventory underlying = getUnderlyingInventory(slot);
+                    if (underlying != null && underlying != inv) {
+                        return underlying.isItemValidForSlot(toLocalSlot(slot), stack);
                     }
+                    return inv.isItemValidForSlot(slot, stack);
                 }
             }
             return false;
@@ -143,12 +163,13 @@ public class ExternalStorageProvider implements IStorageProvider {
 
     private boolean canExtract(IInventory inv, int slot, ItemStack stack) {
         if (inv instanceof ISidedInventory) {
-            for (int side = 0; side < 6; side++) {
-                int[] accessible = ((ISidedInventory) inv).getAccessibleSlotsFromSide(side);
-                for (int s : accessible) {
-                    if (s == slot) {
-                        return ((ISidedInventory) inv).canExtractItem(slot, stack, side);
-                    }
+            Map<Integer, Set<Integer>> slotMap = slotToSidesMap.get(inv);
+            if (slotMap == null) return false;
+            Set<Integer> sides = slotMap.get(slot);
+            if (sides == null || sides.isEmpty()) return false;
+            for (int side : sides) {
+                if (((ISidedInventory) inv).canExtractItem(slot, stack, side)) {
+                    return true;
                 }
             }
             return false;
@@ -156,13 +177,52 @@ public class ExternalStorageProvider implements IStorageProvider {
         return true;
     }
 
+    private void rebuildSlotAccessMap() {
+        slotToSidesMap = new HashMap<>();
+        if (underlyingInventories == null) return;
+        for (IInventory inv : underlyingInventories) {
+            if (inv instanceof ISidedInventory) {
+                Map<Integer, Set<Integer>> slotMap = new HashMap<>();
+                for (int side = 0; side < 6; side++) {
+                    int[] accessible = ((ISidedInventory) inv).getAccessibleSlotsFromSide(side);
+                    for (int s : accessible) {
+                        slotMap.computeIfAbsent(s, k -> new HashSet<>())
+                            .add(side);
+                    }
+                }
+                slotToSidesMap.put(inv, slotMap);
+            } else {
+                slotToSidesMap.put(inv, null);
+            }
+        }
+    }
+
     private void rebuildMergedView() {
+        int currentTick = MinecraftServer.getServer()
+            .getTickCounter();
+        if (currentTick == lastRebuildTick && cachedMergedList != null) {
+            mergedList = cachedMergedList;
+            slotMapping = cachedSlotMapping;
+            return;
+        }
+
         mergedList = new ArrayList<ItemStack>();
         slotMapping = new ArrayList<List<Integer>>();
         IInventory inv = getInventory();
-        if (inv == null) return;
+        if (inv == null) {
+            cachedMergedList = mergedList;
+            cachedSlotMapping = slotMapping;
+            cachedTotalCount = 0;
+            cachedSlotCount = 0;
+            lastRebuildTick = currentTick;
+            rebuildSlotAccessMap();
+            return;
+        }
+
+        rebuildSlotAccessMap();
 
         int[] slots = getAccessibleSlots(inv);
+        long totalCount = 0;
         for (int slot : slots) {
             ItemStack stack = inv.getStackInSlot(slot);
             if (stack == null || stack.stackSize <= 0) continue;
@@ -184,7 +244,14 @@ public class ExternalStorageProvider implements IStorageProvider {
                 mapping.add(slot);
                 slotMapping.add(mapping);
             }
+            totalCount += stack.stackSize;
         }
+
+        cachedMergedList = mergedList;
+        cachedSlotMapping = slotMapping;
+        cachedTotalCount = totalCount;
+        cachedSlotCount = mergedList.size();
+        lastRebuildTick = currentTick;
     }
 
     @Override
@@ -210,11 +277,7 @@ public class ExternalStorageProvider implements IStorageProvider {
     public long getTotalCount() {
         try {
             rebuildMergedView();
-            long count = 0;
-            for (ItemStack stack : mergedList) {
-                count += stack.stackSize;
-            }
-            return count;
+            return cachedTotalCount;
         } catch (Exception e) {
             return 0;
         }
@@ -225,7 +288,8 @@ public class ExternalStorageProvider implements IStorageProvider {
         try {
             IInventory inv = getInventory();
             if (inv == null) return 0;
-            return (long) inv.getSizeInventory() * inv.getInventoryStackLimit();
+            int[] slots = getAccessibleSlots(inv);
+            return (long) slots.length * inv.getInventoryStackLimit();
         } catch (Exception e) {
             return 0;
         }
@@ -235,7 +299,7 @@ public class ExternalStorageProvider implements IStorageProvider {
     public int getSlotCount() {
         try {
             rebuildMergedView();
-            return mergedList.size();
+            return cachedSlotCount;
         } catch (Exception e) {
             return 0;
         }
@@ -283,6 +347,7 @@ public class ExternalStorageProvider implements IStorageProvider {
             }
 
             inv.markDirty();
+            invalidateTickCache();
             return remainder;
         } catch (Exception e) {
             return itemStack;
@@ -374,6 +439,7 @@ public class ExternalStorageProvider implements IStorageProvider {
             }
 
             inv.markDirty();
+            invalidateTickCache();
             return result;
         } catch (Exception e) {
             return null;
@@ -418,6 +484,7 @@ public class ExternalStorageProvider implements IStorageProvider {
             }
 
             inv.markDirty();
+            invalidateTickCache();
             return result.stackSize > 0 ? result : null;
         } catch (Exception e) {
             return null;
