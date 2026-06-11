@@ -92,7 +92,7 @@ public class PortableStoragePanelUpgradeRecipe implements IRecipe {
             case TIER_2:
                 return new ItemStack(Items.ender_pearl);
             case TIER_3:
-                return new ItemStack(Items.ender_eye);
+                return getFirstOreDictStack("ingotBlackSteel");
             case TIER_INFINITY:
                 return getFirstOreDictStack("ingotBlueSteel");
             default:
@@ -105,7 +105,7 @@ public class PortableStoragePanelUpgradeRecipe implements IRecipe {
             case TIER_2:
                 return item == Items.ender_pearl;
             case TIER_3:
-                return item == Items.ender_eye;
+                return isOreDictMatch(item, "ingotBlackSteel");
             case TIER_INFINITY:
                 return isOreDictMatch(item, "ingotBlueSteel");
             default:
