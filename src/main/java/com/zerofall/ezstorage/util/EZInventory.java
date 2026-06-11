@@ -2,7 +2,9 @@ package com.zerofall.ezstorage.util;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemHoe;
@@ -22,7 +24,12 @@ import com.zerofall.ezstorage.configuration.EZConfiguration;
 public class EZInventory {
 
     private boolean hasChanges;
+
+    private final Map<Item, List<ItemStack>> storageMap = new LinkedHashMap<>();
+    private List<ItemStack> displayList = new ArrayList<>();
+    private boolean displayListDirty = true;
     public List<ItemStack> inventory;
+
     public long maxItems = 0;
     private long totalCount = 0;
     private boolean totalCountDirty = true;
@@ -31,7 +38,40 @@ public class EZInventory {
     public ItemStack[] craftMatrix;
 
     public EZInventory() {
-        inventory = new ArrayList<ItemStack>();
+        inventory = displayList;
+    }
+
+    private void ensureDisplayList() {
+        if (!displayListDirty) {
+            return;
+        }
+        displayList = new ArrayList<>();
+        for (List<ItemStack> bucket : storageMap.values()) {
+            for (ItemStack stack : bucket) {
+                if (stack.stackSize > 0) {
+                    displayList.add(stack);
+                }
+            }
+        }
+        displayListDirty = false;
+        inventory = displayList;
+    }
+
+    private void markDisplayListDirty() {
+        displayListDirty = true;
+    }
+
+    private ItemStack findInStorage(ItemStack itemStack) {
+        List<ItemStack> bucket = storageMap.get(itemStack.getItem());
+        if (bucket == null) {
+            return null;
+        }
+        for (ItemStack group : bucket) {
+            if (stacksEqual(group, itemStack)) {
+                return group;
+            }
+        }
+        return null;
     }
 
     public boolean getHasChanges() {
@@ -60,6 +100,7 @@ public class EZInventory {
         int amount = (int) Math.min(space, (long) itemStack.stackSize);
         ItemStack stack = mergeStack(itemStack, amount);
         totalCountDirty = true;
+        markDisplayListDirty();
         setHasChanges();
         return stack;
     }
@@ -82,35 +123,33 @@ public class EZInventory {
     }
 
     public void sort() {
-        Collections.sort(this.inventory, new ItemStackCountComparator());
+        ensureDisplayList();
+        Collections.sort(this.displayList, new ItemStackCountComparator());
         setHasChanges();
     }
 
     private ItemStack mergeStack(ItemStack itemStack, int amount) {
-        boolean found = false;
-        for (ItemStack group : inventory) {
-            if (stacksEqual(group, itemStack)) {
-                group.stackSize += amount;
-                totalCountDirty = true;
-                setHasChanges();
-                found = true;
-                break;
-            }
-        }
-
-        // Add new group, if needed
-        if (!found) {
+        ItemStack existing = findInStorage(itemStack);
+        if (existing != null) {
+            existing.stackSize += amount;
+            totalCountDirty = true;
+            setHasChanges();
+        } else {
             if (EZConfiguration.maxItemTypes != 0 && slotCount() > EZConfiguration.maxItemTypes) {
                 return itemStack;
             }
             ItemStack copy = itemStack.copy();
             copy.stackSize = amount;
-            inventory.add(copy);
+            List<ItemStack> bucket = storageMap.get(copy.getItem());
+            if (bucket == null) {
+                bucket = new ArrayList<>();
+                storageMap.put(copy.getItem(), bucket);
+            }
+            bucket.add(copy);
             totalCountDirty = true;
             setHasChanges();
         }
 
-        // Adjust input/return stack
         itemStack.stackSize -= amount;
         if (itemStack.stackSize <= 0) {
             return null;
@@ -121,10 +160,11 @@ public class EZInventory {
 
     // Type: 0= full stack, 1= half stack, 2= single
     public ItemStack getItemsAt(int index, int type) {
-        if (index >= inventory.size()) {
+        ensureDisplayList();
+        if (index >= displayList.size()) {
             return null;
         }
-        ItemStack group = inventory.get(index);
+        ItemStack group = displayList.get(index);
         ItemStack stack = group.copy();
         int size = Math.min(stack.getMaxStackSize(), group.stackSize);
         if (size > 1) {
@@ -137,18 +177,20 @@ public class EZInventory {
         stack.stackSize = size;
         group.stackSize -= size;
         if (group.stackSize <= 0) {
-            inventory.remove(index);
+            removeStackFromStorage(group);
         }
         totalCountDirty = true;
+        markDisplayListDirty();
         setHasChanges();
         return stack;
     }
 
     public ItemStack getItemStackAt(int index, int size) {
-        if (index >= inventory.size()) {
+        ensureDisplayList();
+        if (index >= displayList.size()) {
             return null;
         }
-        ItemStack group = inventory.get(index);
+        ItemStack group = displayList.get(index);
         ItemStack stack = group.copy();
         if (size > group.stackSize) {
             size = group.stackSize;
@@ -156,18 +198,20 @@ public class EZInventory {
         stack.stackSize = size;
         group.stackSize -= size;
         if (group.stackSize <= 0) {
-            inventory.remove(index);
+            removeStackFromStorage(group);
         }
         totalCountDirty = true;
+        markDisplayListDirty();
         setHasChanges();
         return stack;
     }
 
     public ItemStack simulateRemove(int index, int size) {
-        if (index >= inventory.size()) {
+        ensureDisplayList();
+        if (index >= displayList.size()) {
             return null;
         }
-        ItemStack group = inventory.get(index);
+        ItemStack group = displayList.get(index);
         ItemStack stack = group.copy();
         if (size > group.stackSize) {
             size = group.stackSize;
@@ -176,36 +220,40 @@ public class EZInventory {
         return stack;
     }
 
+    public List<ItemStack> getAllItems() {
+        ensureDisplayList();
+        return displayList;
+    }
+
     public ItemStack getItems(ItemStack[] itemStacks) {
-        for (ItemStack group : inventory) {
-            for (ItemStack itemStack : itemStacks) {
-                if (stacksEqual(group, itemStack)) {
-                    if (group.stackSize >= itemStack.stackSize) {
-                        ItemStack stack = group.copy();
-                        stack.stackSize = itemStack.stackSize;
-                        group.stackSize -= itemStack.stackSize;
-                        if (group.stackSize <= 0) {
-                            inventory.remove(group);
-                        }
-                        totalCountDirty = true;
-                        setHasChanges();
-                        return stack;
-                    }
-                    return null;
+        for (ItemStack requested : itemStacks) {
+            ItemStack group = findInStorage(requested);
+            if (group != null && group.stackSize >= requested.stackSize) {
+                ItemStack stack = group.copy();
+                stack.stackSize = requested.stackSize;
+                group.stackSize -= requested.stackSize;
+                if (group.stackSize <= 0) {
+                    removeStackFromStorage(group);
                 }
+                totalCountDirty = true;
+                markDisplayListDirty();
+                setHasChanges();
+                return stack;
             }
         }
         return null;
     }
 
     public ItemStack extractAll(int index) {
-        if (index >= inventory.size()) {
+        ensureDisplayList();
+        if (index >= displayList.size()) {
             return null;
         }
-        ItemStack group = inventory.get(index);
+        ItemStack group = displayList.get(index);
         ItemStack result = group.copy();
-        inventory.remove(index);
+        removeStackFromStorage(group);
         totalCountDirty = true;
+        markDisplayListDirty();
         setHasChanges();
         return result;
     }
@@ -219,8 +267,9 @@ public class EZInventory {
     }
 
     public int getIndexOf(ItemStack itemStack) {
-        for (int i = 0; i < inventory.size(); i++) {
-            if (stacksEqual(inventory.get(i), itemStack)) {
+        ensureDisplayList();
+        for (int i = 0; i < displayList.size(); i++) {
+            if (stacksEqual(displayList.get(i), itemStack)) {
                 return i;
             }
         }
@@ -228,7 +277,11 @@ public class EZInventory {
     }
 
     public int slotCount() {
-        return inventory.size();
+        int count = 0;
+        for (List<ItemStack> bucket : storageMap.values()) {
+            count += bucket.size();
+        }
+        return count;
     }
 
     public static boolean stacksEqual(ItemStack stack1, ItemStack stack2) {
@@ -263,8 +316,10 @@ public class EZInventory {
             return totalCount;
         }
         long count = 0;
-        for (ItemStack group : inventory) {
-            count += group.stackSize;
+        for (List<ItemStack> bucket : storageMap.values()) {
+            for (ItemStack stack : bucket) {
+                count += stack.stackSize;
+            }
         }
         totalCount = count;
         totalCountDirty = false;
@@ -273,18 +328,20 @@ public class EZInventory {
 
     @Override
     public String toString() {
-        return inventory.toString();
+        ensureDisplayList();
+        return displayList.toString();
     }
 
     public void writeToNBT(NBTTagCompound tag) {
         NBTTagList nbttaglist = new NBTTagList();
-        for (int i = 0; i < this.slotCount(); ++i) {
-            ItemStack group = this.inventory.get(i);
-            if (group != null && group.stackSize > 0) {
-                NBTTagCompound nbttagcompound1 = new NBTTagCompound();
-                group.writeToNBT(nbttagcompound1);
-                nbttagcompound1.setInteger("InternalCount", group.stackSize);
-                nbttaglist.appendTag(nbttagcompound1);
+        for (List<ItemStack> bucket : storageMap.values()) {
+            for (ItemStack group : bucket) {
+                if (group != null && group.stackSize > 0) {
+                    NBTTagCompound nbttagcompound1 = new NBTTagCompound();
+                    group.writeToNBT(nbttagcompound1);
+                    nbttagcompound1.setInteger("InternalCount", group.stackSize);
+                    nbttaglist.appendTag(nbttagcompound1);
+                }
             }
         }
         tag.setTag("Internal", nbttaglist);
@@ -309,7 +366,7 @@ public class EZInventory {
         NBTTagList nbttaglist = tag.getTagList("Internal", 10);
 
         if (nbttaglist != null) {
-            inventory = new ArrayList<ItemStack>();
+            storageMap.clear();
             for (int i = 0; i < nbttaglist.tagCount(); ++i) {
                 NBTTagCompound nbttagcompound1 = nbttaglist.getCompoundTagAt(i);
                 ItemStack stack = ItemStack.loadItemStackFromNBT(nbttagcompound1);
@@ -322,9 +379,15 @@ public class EZInventory {
                 } else if (nbttagcompound1.hasKey("InternalCount", 4)) {
                     stack.stackSize = (int) nbttagcompound1.getLong("InternalCount");
                 }
-                this.inventory.add(stack);
+                List<ItemStack> bucket = storageMap.get(stack.getItem());
+                if (bucket == null) {
+                    bucket = new ArrayList<>();
+                    storageMap.put(stack.getItem(), bucket);
+                }
+                bucket.add(stack);
             }
             totalCountDirty = true;
+            markDisplayListDirty();
         }
         this.maxItems = tag.getLong("InternalMax");
         this.disabled = tag.getBoolean("isDisabled");
@@ -340,6 +403,37 @@ public class EZInventory {
                 }
             }
         }
+    }
+
+    private void removeStackFromStorage(ItemStack stack) {
+        List<ItemStack> bucket = storageMap.get(stack.getItem());
+        if (bucket != null) {
+            for (int i = 0; i < bucket.size(); i++) {
+                if (bucket.get(i) == stack) {
+                    bucket.remove(i);
+                    break;
+                }
+            }
+            if (bucket.isEmpty()) {
+                storageMap.remove(stack.getItem());
+            }
+        }
+    }
+
+    public void setItemsFromList(List<ItemStack> items) {
+        storageMap.clear();
+        for (ItemStack stack : items) {
+            if (stack != null && stack.stackSize > 0) {
+                List<ItemStack> bucket = storageMap.get(stack.getItem());
+                if (bucket == null) {
+                    bucket = new ArrayList<>();
+                    storageMap.put(stack.getItem(), bucket);
+                }
+                bucket.add(stack);
+            }
+        }
+        totalCountDirty = true;
+        markDisplayListDirty();
     }
 
     private static final EnumSize MAX_ALLOWED_SIZE = EnumSize.LARGE;
