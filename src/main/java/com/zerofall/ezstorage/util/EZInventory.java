@@ -24,6 +24,8 @@ public class EZInventory {
     private boolean hasChanges;
     public List<ItemStack> inventory;
     public long maxItems = 0;
+    private long totalCount = 0;
+    private boolean totalCountDirty = true;
     public String id;
     public boolean disabled;
     public ItemStack[] craftMatrix;
@@ -49,13 +51,15 @@ public class EZInventory {
             return itemStack;
         }
         // Inventory is full
-        if (getTotalCount() >= maxItems) {
+        long currentCount = getTotalCount();
+        if (currentCount >= maxItems) {
             return itemStack;
         }
-        long space = maxItems - getTotalCount();
+        long space = maxItems - currentCount;
         // Only part of the stack can fit
         int amount = (int) Math.min(space, (long) itemStack.stackSize);
         ItemStack stack = mergeStack(itemStack, amount);
+        totalCountDirty = true;
         setHasChanges();
         return stack;
     }
@@ -87,6 +91,7 @@ public class EZInventory {
         for (ItemStack group : inventory) {
             if (stacksEqual(group, itemStack)) {
                 group.stackSize += amount;
+                totalCountDirty = true;
                 setHasChanges();
                 found = true;
                 break;
@@ -101,6 +106,7 @@ public class EZInventory {
             ItemStack copy = itemStack.copy();
             copy.stackSize = amount;
             inventory.add(copy);
+            totalCountDirty = true;
             setHasChanges();
         }
 
@@ -133,6 +139,7 @@ public class EZInventory {
         if (group.stackSize <= 0) {
             inventory.remove(index);
         }
+        totalCountDirty = true;
         setHasChanges();
         return stack;
     }
@@ -151,6 +158,7 @@ public class EZInventory {
         if (group.stackSize <= 0) {
             inventory.remove(index);
         }
+        totalCountDirty = true;
         setHasChanges();
         return stack;
     }
@@ -179,6 +187,7 @@ public class EZInventory {
                         if (group.stackSize <= 0) {
                             inventory.remove(group);
                         }
+                        totalCountDirty = true;
                         setHasChanges();
                         return stack;
                     }
@@ -196,6 +205,7 @@ public class EZInventory {
         ItemStack group = inventory.get(index);
         ItemStack result = group.copy();
         inventory.remove(index);
+        totalCountDirty = true;
         setHasChanges();
         return result;
     }
@@ -249,10 +259,15 @@ public class EZInventory {
     }
 
     public long getTotalCount() {
+        if (!totalCountDirty) {
+            return totalCount;
+        }
         long count = 0;
         for (ItemStack group : inventory) {
             count += group.stackSize;
         }
+        totalCount = count;
+        totalCountDirty = false;
         return count;
     }
 
@@ -309,6 +324,7 @@ public class EZInventory {
                 }
                 this.inventory.add(stack);
             }
+            totalCountDirty = true;
         }
         this.maxItems = tag.getLong("InternalMax");
         this.disabled = tag.getBoolean("isDisabled");

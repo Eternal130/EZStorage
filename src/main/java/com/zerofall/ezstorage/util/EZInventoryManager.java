@@ -6,8 +6,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.UUID;
 
@@ -17,7 +17,6 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.CompressedStreamTools;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.tileentity.TileEntity;
 import net.minecraft.world.WorldServer;
 import net.minecraftforge.common.DimensionManager;
 
@@ -29,17 +28,39 @@ import com.zerofall.ezstorage.tileentity.TileEntityStorageCore;
 
 public class EZInventoryManager {
 
-    private static final HashSet<EZInventory> inventories = new HashSet<>();
+    private static final HashMap<String, EZInventory> inventories = new HashMap<>();
+    private static final Map<String, List<TileEntityStorageCore>> coreRegistry = new HashMap<>();
+
+    public static void registerCore(TileEntityStorageCore core) {
+        if (core == null || core.inventoryId == null || core.inventoryId.isEmpty()) {
+            return;
+        }
+        coreRegistry.computeIfAbsent(core.inventoryId, k -> new ArrayList<>())
+            .add(core);
+    }
+
+    public static void unregisterCore(TileEntityStorageCore core) {
+        if (core == null || core.inventoryId == null || core.inventoryId.isEmpty()) {
+            return;
+        }
+        List<TileEntityStorageCore> cores = coreRegistry.get(core.inventoryId);
+        if (cores != null) {
+            cores.remove(core);
+            if (cores.isEmpty()) {
+                coreRegistry.remove(core.inventoryId);
+            }
+        }
+    }
 
     public static EZInventory createInventory() {
         return createInventory(new EZInventory());
     }
 
     public static EZInventory createInventory(EZInventory inventory) {
-        if (!inventories.contains(inventory)) {
+        if (!inventories.containsKey(inventory.id)) {
             inventory.id = UUID.randomUUID()
                 .toString();
-            inventories.add(inventory);
+            inventories.put(inventory.id, inventory);
         }
         inventory.setHasChanges();
         return inventory;
@@ -47,10 +68,9 @@ public class EZInventoryManager {
 
     public static EZInventory getInventory(String id) {
         // Find loaded inventory
-        for (EZInventory inventory : inventories) {
-            if (inventory.id.equals(id)) {
-                return inventory;
-            }
+        EZInventory cached = inventories.get(id);
+        if (cached != null) {
+            return cached;
         }
 
         // Load inventory
@@ -61,7 +81,7 @@ public class EZInventoryManager {
                 inventory.readFromNBT(tag);
                 inventory.resetHasChanges();
                 inventory.id = id;
-                inventories.add(inventory);
+                inventories.put(inventory.id, inventory);
                 return inventory;
             }
         }
@@ -74,7 +94,7 @@ public class EZInventoryManager {
         HashMap<String, NBTTagCompound> cache = new HashMap<String, NBTTagCompound>();
 
         // Write to NBT
-        for (EZInventory inventory : inventories) {
+        for (EZInventory inventory : inventories.values()) {
             if (inventory.getHasChanges()) {
                 NBTTagCompound tag = new NBTTagCompound();
                 inventory.writeToNBT(tag);
@@ -97,7 +117,7 @@ public class EZInventoryManager {
     }
 
     public static void saveInventory(EZInventory inventory) {
-        if (inventories.contains(inventory) && inventory.getHasChanges()) {
+        if (inventories.containsKey(inventory.id) && inventory.getHasChanges()) {
             NBTTagCompound tag = new NBTTagCompound();
             inventory.writeToNBT(tag);
             inventory.resetHasChanges();
@@ -111,7 +131,7 @@ public class EZInventoryManager {
     }
 
     public static void deleteInventory(EZInventory inventory) {
-        if (inventories.remove(inventory)) {
+        if (inventories.remove(inventory.id) != null) {
             File file = getFilePath(inventory.id);
             new Thread(() -> {
                 synchronized (inventories) {
@@ -200,9 +220,26 @@ public class EZInventoryManager {
     }
 
     /**
+     * Build a MsgStorage that represents the unified (merged across all providers) view
+     * of this inventory, without mutating the EZInventory instance.
+     * Uses a temporary EZInventory to serialize unified data to NBT.
+     */
+    public static MsgStorage buildUnifiedMsg(EZInventory inventory, TileEntityStorageCore core) {
+        if (core == null || core.getProviders()
+            .size() <= 1) {
+            return new MsgStorage(inventory);
+        }
+
+        // Construct a temporary inventory with unified data for serialization only
+        EZInventory temp = new EZInventory();
+        temp.inventory = new ArrayList<ItemStack>(core.getUnifiedItemList());
+        temp.maxItems = core.getUnifiedCapacity();
+
+        return new MsgStorage(inventory.id, temp);
+    }
+
+    /**
      * Send unified (merged across all providers) item data to clients.
-     * Temporarily swaps the inventory's item list with the unified list,
-     * sends, then restores the original state.
      */
     public static void sendToClients(EZInventory inventory, TileEntityStorageCore core) {
         if (core == null || core.getProviders()
@@ -211,25 +248,12 @@ public class EZInventoryManager {
             return;
         }
 
-        List<ItemStack> unifiedItems = core.getUnifiedItemList();
-
-        // Temporarily swap the inventory's item list with the unified list
-        List<ItemStack> originalItems = inventory.inventory;
-        long originalMaxItems = inventory.maxItems;
-
-        try {
-            inventory.inventory = new ArrayList<ItemStack>(unifiedItems);
-            inventory.maxItems = core.getUnifiedCapacity();
-
-            sendToClients(inventory);
-        } finally {
-            inventory.inventory = originalItems;
-            inventory.maxItems = originalMaxItems;
-        }
+        MsgStorage msg = buildUnifiedMsg(inventory, core);
+        sendMsgToClients(inventory, msg);
     }
 
-    public static void sendToClients(EZInventory inventory, boolean checkTileEntities) {
-        if (inventory == null || !inventories.contains(inventory)) {
+    private static void sendMsgToClients(EZInventory inventory, MsgStorage msg) {
+        if (inventory == null || !inventories.containsKey(inventory.id)) {
             return;
         }
 
@@ -239,20 +263,40 @@ public class EZInventoryManager {
         }
 
         for (WorldServer world : server.worldServers) {
-            // Send inventory packet to players with open Storage Core gui
             for (EntityPlayer player : world.playerEntities) {
                 if (player.openContainer instanceof ContainerStorageCore container && container.inventory == inventory
                     && player instanceof EntityPlayerMP playerMP) {
-                    EZStorage.instance.network.sendTo(new MsgStorage(inventory), playerMP);
+                    EZStorage.instance.network.sendTo(msg, playerMP);
                 }
             }
+        }
+    }
 
-            // Update Storage Core tile entities
-            if (checkTileEntities) {
-                for (TileEntity tileEntity : world.loadedTileEntityList) {
-                    if (tileEntity instanceof TileEntityStorageCore core && core.getInventory() == inventory) {
-                        core.updateTileEntity(false);
-                    }
+    public static void sendToClients(EZInventory inventory, boolean checkTileEntities) {
+        if (inventory == null || !inventories.containsKey(inventory.id)) {
+            return;
+        }
+
+        MinecraftServer server = MinecraftServer.getServer();
+        if (server == null) {
+            return;
+        }
+
+        MsgStorage msg = new MsgStorage(inventory);
+        for (WorldServer world : server.worldServers) {
+            for (EntityPlayer player : world.playerEntities) {
+                if (player.openContainer instanceof ContainerStorageCore container && container.inventory == inventory
+                    && player instanceof EntityPlayerMP playerMP) {
+                    EZStorage.instance.network.sendTo(msg, playerMP);
+                }
+            }
+        }
+
+        if (checkTileEntities) {
+            List<TileEntityStorageCore> cores = coreRegistry.get(inventory.id);
+            if (cores != null) {
+                for (TileEntityStorageCore core : cores) {
+                    core.updateTileEntity(false);
                 }
             }
         }
