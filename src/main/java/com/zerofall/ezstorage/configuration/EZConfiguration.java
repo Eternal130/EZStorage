@@ -67,6 +67,24 @@ public class EZConfiguration {
     @Config.DefaultString("")
     public static String guiSearchText;
 
+    @Config.Comment("Max total weight in oz a food storage box accepts. 0 = unlimited. Only restricts insertion; extraction is never limited.")
+    @Config.DefaultInt(0)
+    @Config.RangeInt(min = 0)
+    public static int foodStorageCapOz;
+
+    @Config.Comment("Weight in oz extracted from a food storage box per hopper operation.")
+    @Config.DefaultInt(160)
+    @Config.RangeInt(min = 1)
+    public static int hopperExtractOz;
+
+    @Config.Comment("How decay is handled on extraction: intact = only undecayed weight comes out, rot stays behind (default); proportional = extracted portion carries proportional decay.")
+    @Config.DefaultString("intact")
+    public static String decayExtractMode;
+
+    @Config.Comment("Allow container foods (bowls, etc.) to move through hoppers/pipes in and out of food storage boxes. Container stripping/refund itself arrives in a later phase.")
+    @Config.DefaultBoolean(false)
+    public static boolean allowHopperContainerFood;
+
     public static void init() {
         try {
             ConfigurationManager.registerConfig(EZConfiguration.class);

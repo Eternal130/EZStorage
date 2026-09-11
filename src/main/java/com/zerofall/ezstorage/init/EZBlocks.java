@@ -10,6 +10,7 @@ import net.minecraftforge.oredict.ShapedOreRecipe;
 import com.dunk.tfc.api.TFCBlocks;
 import com.zerofall.ezstorage.block.BlockCondensedStorage;
 import com.zerofall.ezstorage.block.BlockCraftingBox;
+import com.zerofall.ezstorage.block.BlockFoodStorage;
 import com.zerofall.ezstorage.block.BlockHyperStorage;
 import com.zerofall.ezstorage.block.BlockInventoryProxy;
 import com.zerofall.ezstorage.block.BlockStorage;
@@ -19,6 +20,7 @@ import com.zerofall.ezstorage.block.BlockStorageCore;
 import com.zerofall.ezstorage.block.BlockStoragePanel;
 import com.zerofall.ezstorage.configuration.EZConfiguration;
 import com.zerofall.ezstorage.item.ItemBlockStorage;
+import com.zerofall.ezstorage.tileentity.TileEntityFoodStorage;
 import com.zerofall.ezstorage.tileentity.TileEntityInventoryProxy;
 import com.zerofall.ezstorage.tileentity.TileEntityStorageAdapter;
 import com.zerofall.ezstorage.tileentity.TileEntityStorageCore;
@@ -38,6 +40,7 @@ public class EZBlocks {
     public static Block storage_panel;
     public static Block storage_cable;
     public static Block storage_adapter;
+    public static Block food_storage;
 
     public static void init() {
         storage_core = new BlockStorageCore();
@@ -49,6 +52,7 @@ public class EZBlocks {
         storage_panel = new BlockStoragePanel();
         storage_cable = new BlockStorageCable();
         storage_adapter = new BlockStorageAdapter();
+        food_storage = new BlockFoodStorage();
     }
 
     public static void register() {
@@ -60,6 +64,8 @@ public class EZBlocks {
         GameRegistry.registerBlock(inventory_proxy, inventory_proxy.getUnlocalizedName().substring(5));
         GameRegistry.registerTileEntity(TileEntityInventoryProxy.class, "TileEntityInputPort");
         GameRegistry.registerBlock(crafting_box, crafting_box.getUnlocalizedName().substring(5));
+        GameRegistry.registerBlock(food_storage, food_storage.getUnlocalizedName().substring(5));
+        GameRegistry.registerTileEntity(TileEntityFoodStorage.class, "TileEntityFoodStorage");
         if (EZConfiguration.experimentalContent) {
             // This blocks add new options to the game not intended to be included into this mod.
             // Maybe will move them to another mod, an add-on.
