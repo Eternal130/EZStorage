@@ -13,8 +13,10 @@ import net.minecraft.inventory.Slot;
 import net.minecraft.item.ItemStack;
 import net.minecraft.network.play.server.S2FPacketSetSlot;
 import net.minecraft.network.play.server.S30PacketWindowItems;
+import net.minecraft.util.ChatComponentTranslation;
 
 import com.dunk.tfc.api.Constant.Global;
+import com.gtnewhorizon.gtnhlib.GTNHLib;
 import com.zerofall.ezstorage.tileentity.TileEntityFoodStorage;
 import com.zerofall.ezstorage.tileentity.TileEntityStorageCore;
 import com.zerofall.ezstorage.util.EZInventory;
@@ -111,6 +113,24 @@ public class ContainerStorageCore extends Container {
         return coreTileEntity.unifiedExtract(itemIndex, type);
     }
 
+    /**
+     * Shows an action-bar hint naming the missing container when a food
+     * aggregate extract came back empty (container food with no cached
+     * container to pay for the extracted stack).
+     */
+    private void sendFoodExtractHint(int itemIndex, EntityPlayer player) {
+        if (coreTileEntity == null || !(player instanceof EntityPlayerMP playerMP)) return;
+        String missing = coreTileEntity.getMissingContainerForUnified(itemIndex);
+        if (missing != null) {
+            GTNHLib.proxy.sendMessageAboveHotbar(
+                playerMP,
+                new ChatComponentTranslation("chat.msg.ezstorage.food.need_container", missing),
+                60,
+                true,
+                true);
+        }
+    }
+
     public ItemStack customSlotClick(int slotId, int clickedButton, int mode, EntityPlayer playerIn) {
         int itemIndex = slotId;
         ItemStack heldStack = playerIn.inventory.getItemStack();
@@ -123,6 +143,16 @@ public class ContainerStorageCore extends Container {
                 ItemStack all;
                 if (coreTileEntity != null) {
                     all = extractViaCore(itemIndex, 0, 2);
+                    if (all == null) {
+                        sendFoodExtractHint(itemIndex, playerIn);
+                        // A blocked extract (e.g. missing container) looks
+                        // identical to success in the client's optimistic
+                        // prediction — force a resync so a ghost cursor stack
+                        // and the locally decremented row are corrected. This
+                        // branch returns early, bypassing the trailing sync.
+                        EZInventoryManager.sendToClients(inventory, coreTileEntity);
+                        forceSyncPlayerState(playerIn);
+                    }
                 } else {
                     all = this.inventory.extractAll(itemIndex);
                 }
@@ -146,6 +176,14 @@ public class ContainerStorageCore extends Container {
             ItemStack stack;
             if (coreTileEntity != null) {
                 stack = extractViaCore(itemIndex, clickedButton, mode);
+                if (stack == null) {
+                    sendFoodExtractHint(itemIndex, playerIn);
+                    // Failed server-side extraction (e.g. container-blocked
+                    // food): the client predicted success and already put a
+                    // ghost on the cursor + decremented the row. Flag the
+                    // trailing resync to correct both.
+                    sendToClients = true;
+                }
             } else {
                 stack = this.inventory.getItemsAt(itemIndex, type);
             }

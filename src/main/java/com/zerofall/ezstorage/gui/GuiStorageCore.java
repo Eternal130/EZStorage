@@ -31,6 +31,7 @@ import org.lwjgl.input.Mouse;
 import org.lwjgl.opengl.GL11;
 
 import com.dunk.tfc.Food.ItemFoodTFC;
+import com.gtnewhorizon.gtnhlib.GTNHLib;
 import com.zerofall.ezstorage.EZStorage;
 import com.zerofall.ezstorage.Reference;
 import com.zerofall.ezstorage.configuration.EZConfiguration;
@@ -443,8 +444,18 @@ public class GuiStorageCore extends GuiContainer {
                     if (font == null) font = fontRendererObj;
                     RenderHelper.enableGUIStandardItemLighting();
                     itemRender.renderItemAndEffectIntoGUI(font, this.mc.getTextureManager(), stack, x, y);
-                    String badge = TileEntityFoodStorage.isFoodAggregate(stack) ? stack.stackSize + " oz"
-                        : "" + stack.stackSize;
+                    String badge;
+                    if (TileEntityFoodStorage.isFoodAggregate(stack)) {
+                        // Badge shows the exact stored weight; stackSize is the
+                        // portion count used for the header total.
+                        NBTTagCompound foodTag = stack.getTagCompound();
+                        float oz = foodTag.hasKey(TileEntityFoodStorage.NBT_WEIGHT)
+                            ? foodTag.getFloat(TileEntityFoodStorage.NBT_WEIGHT)
+                            : stack.stackSize;
+                        badge = Math.round(oz) + " oz";
+                    } else {
+                        badge = "" + stack.stackSize;
+                    }
                     ezRenderer.renderItemOverlayIntoGUI(font, stack, x, y, badge);
                 }
                 x += 18;
@@ -532,6 +543,29 @@ public class GuiStorageCore extends GuiContainer {
                 ItemStack group = this.filteredList.get(slot);
                 if (group == null || group.stackSize == 0) {
                     return;
+                }
+                // Container-blocked food extracts are a local no-op: the
+                // server would reject them, and letting the optimistic
+                // prediction run only produces a flashing ghost stack before
+                // the resync corrects it. The client's synced unified list
+                // already contains the system storage (including deposited
+                // containers), so the check is exact except for the brief
+                // window before the last server sync.
+                if (TileEntityFoodStorage.isFoodAggregate(group)) {
+                    ItemStack needed = TileEntityFoodStorage.getNeededContainer(group);
+                    if (needed != null && !clientListHasContainer(needed)) {
+                        // Same feedback the server path gives (action-bar),
+                        // rendered client-side so the blocked click is
+                        // explained immediately with zero ghost flicker.
+                        GTNHLib.proxy.printMessageAboveHotbar(
+                            StatCollector.translateToLocalFormatted(
+                                "chat.msg.ezstorage.food.need_container",
+                                needed.getDisplayName()),
+                            60,
+                            true,
+                            true);
+                        return;
+                    }
                 }
                 index = getInventory().getIndexOf(group);
                 if (index < 0) {
@@ -728,6 +762,19 @@ public class GuiStorageCore extends GuiContainer {
                 ItemStack stackDest = filteredMap.get(stackKey(stackSrc));
                 if (stackDest != null) {
                     stackDest.stackSize = stackSrc.stackSize;
+                    // Refresh the row's NBT too: food aggregate rows bake
+                    // weight/decay/taste into NBT, and the badge/bars read
+                    // those — updating only stackSize would freeze the
+                    // displayed weight while shift is held. Identity keys are
+                    // computed from stripped copies, so this never breaks the
+                    // row matching above.
+                    if (stackSrc.hasTagCompound()) {
+                        stackDest.setTagCompound(
+                            (NBTTagCompound) stackSrc.getTagCompound()
+                                .copy());
+                    } else {
+                        stackDest.setTagCompound(null);
+                    }
                 } else {
                     listNewStacks.add(stackSrc);
                 }
@@ -736,6 +783,16 @@ public class GuiStorageCore extends GuiContainer {
             for (ItemStack stackDest : filteredList) {
                 if (!inventoryMap.containsKey(stackKey(stackDest))) {
                     stackDest.stackSize = 0;
+                    // Tombstone rows keep rendering until shift is released.
+                    // For food aggregates the badge reads the baked NBT
+                    // weight, which would keep showing the pre-extract weight
+                    // (e.g. "76 oz") on a box that is actually empty — strip
+                    // it so the badge falls back to the zeroed stackSize.
+                    if (stackDest.getTagCompound() != null && stackDest.getTagCompound()
+                        .hasKey(TileEntityFoodStorage.NBT_WEIGHT)) {
+                        stackDest.getTagCompound()
+                            .removeTag(TileEntityFoodStorage.NBT_WEIGHT);
+                    }
                 }
             }
 
@@ -745,11 +802,33 @@ public class GuiStorageCore extends GuiContainer {
     }
 
     private static String stackKey(ItemStack stack) {
+        // Food aggregate display stacks bake volatile values (weight, decay,
+        // taste average) into NBT, so a plain NBT hash changes on every
+        // insert/extract — the incremental shift-diff would tombstone the old
+        // row as 0-count and append a new one (ghost "0 oz" entries). Use the
+        // stable identity key instead.
+        String aggKey = TileEntityFoodStorage.aggregateKey(stack);
+        if (aggKey != null) return aggKey;
         NBTTagCompound tag = stack.getTagCompound();
         return Item.getIdFromItem(stack.getItem()) + ":"
             + stack.getItemDamage()
             + ":"
             + (tag != null ? tag.hashCode() : 0);
+    }
+
+    /**
+     * Client-side check whether the synced unified list holds at least one of
+     * the given container (item + damage + NBT). Used to no-op
+     * container-blocked food extracts locally instead of round-tripping a
+     * click the server would reject (which flashed a ghost stack).
+     */
+    private boolean clientListHasContainer(ItemStack needed) {
+        for (ItemStack stack : getInventory().getAllItems()) {
+            if (stack != null && EZInventory.stacksEqual(stack, needed)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void sortFilteredList() {

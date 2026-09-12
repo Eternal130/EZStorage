@@ -1,23 +1,39 @@
 package com.zerofall.ezstorage.tileentity;
 
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import net.minecraft.entity.item.EntityItem;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.inventory.ISidedInventory;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 import net.minecraft.world.World;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import com.dunk.tfc.Core.TFC_Core;
 import com.dunk.tfc.Core.TFC_Time;
+import com.dunk.tfc.Food.ItemSalad;
+import com.dunk.tfc.Food.ItemSandwich;
 import com.dunk.tfc.api.Food;
 import com.dunk.tfc.api.Interfaces.IFood;
+import com.dunk.tfc.api.TFCItems;
 import com.dunk.tfc.api.TFCOptions;
+import com.dunk.tfc.api.Tools.IKnife;
+import com.zerofall.ezstorage.Reference;
 import com.zerofall.ezstorage.configuration.EZConfiguration;
+
+import cpw.mods.fml.common.registry.GameRegistry;
 
 /**
  * Multiblock member that stores TFC food aggregated by weight in ounces.
@@ -82,6 +98,22 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
     private int preExtractTimer;
     private final float[] preExtractTaste = new float[5];
     private boolean restoreValid = false;
+    /**
+     * Container consumed by the immediately preceding extractOz, refunded
+     * when a hopper write-back undoes that extraction (the food portion never
+     * left, so the container paid to system storage must go back). Cleared
+     * before every extraction attempt and at every tile tick.
+     */
+    private ItemStack lastPaidContainer;
+
+    /** Cached "system storage has a knife" answer, refreshed every 40 ticks. */
+    private boolean knifeCached;
+    private int knifeCheckTimer;
+
+    /** Lazily parsed config: items that can never be knife-split. */
+    private static Set<Item> noSplitItems;
+    /** Lazily parsed config: per-item extract portion cap overrides in oz. */
+    private static Map<Item, Integer> extractCaps;
 
     /**
      * Checks whether the given stack is a food aggregate display stack
@@ -91,6 +123,34 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
         return is != null && is.getTagCompound() != null
             && is.getTagCompound()
                 .hasKey(NBT_MARKER);
+    }
+
+    /**
+     * Stable identity key for a food aggregate display stack, independent of
+     * the volatile values baked into its NBT (exact weight, decay, taste
+     * average — those change on every insert/extract/rot tick). Two display
+     * stacks of the same food kind must map to the same key so the GUI's
+     * incremental diff can update the existing row in place instead of
+     * orphaning it as a 0-count tombstone and appending a new row. The key
+     * hashes the identity template: all NBT except the volatile keys and the
+     * display-only marker keys.
+     */
+    public static String aggregateKey(ItemStack is) {
+        if (!isFoodAggregate(is)) return null;
+        NBTTagCompound tag = is.getTagCompound();
+        // Work on a COPY: stripping keys must never mutate the live stack.
+        NBTTagCompound identity = (NBTTagCompound) tag.copy();
+        for (String key : VOLATILE_KEYS) {
+            identity.removeTag(key);
+        }
+        identity.removeTag(NBT_MARKER);
+        identity.removeTag(NBT_DECAY);
+        identity.removeTag(NBT_WEIGHT);
+        NBTTagCompound procTag = identity.getCompoundTag(Food.PROCESSING_TAG);
+        if (identity.hasKey(Food.PROCESSING_TAG)) {
+            procTag.removeTag(Food.SMOKE_COUNTER_TAG);
+        }
+        return Item.getIdFromItem(is.getItem()) + ":" + is.getItemDamage() + ":" + identity.hashCode();
     }
 
     /**
@@ -110,6 +170,63 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
             .getContainerItem(is) != null
             || (is.getTagCompound() != null && is.getTagCompound()
                 .hasKey("bowlMeta"));
+    }
+
+    /**
+     * The container stack that must be surrendered for one unit of the given
+     * food: its vanilla container item (copied, size 1), or the ceramic bowl
+     * recorded in {@code bowlMeta} for salads. Null for plain food.
+     */
+    public static ItemStack getNeededContainer(ItemStack templateLike) {
+        ItemStack cc = templateLike.getItem()
+            .getContainerItem(templateLike);
+        if (cc != null) {
+            cc = cc.copy();
+            cc.stackSize = 1;
+            return cc;
+        }
+        NBTTagCompound tag = templateLike.getTagCompound();
+        if (tag != null && tag.hasKey("bowlMeta")) {
+            return new ItemStack(TFCItems.potteryBowl, 1, tag.getInteger("bowlMeta"));
+        }
+        return null;
+    }
+
+    /** Deposits a stripped container into system storage; pops it into the world when there is no space. */
+    private void depositContainer(ItemStack container) {
+        ItemStack remainder = container;
+        TileEntityStorageCore core = getCore();
+        if (core != null) {
+            remainder = core.unifiedInput(container);
+        }
+        if (remainder != null) {
+            spill(remainder);
+        }
+    }
+
+    /**
+     * True when one matching container is available in system storage for the
+     * current template; consumes it when {@code consume} is set.
+     */
+    private boolean payContainerFromSystem(boolean consume) {
+        ItemStack needed = getNeededContainer(template);
+        if (needed == null) return true;
+        TileEntityStorageCore core = getCore();
+        if (core == null) return false;
+        return consume ? core.unifiedConsumeContainer(needed) : core.unifiedHasContainer(needed);
+    }
+
+    /**
+     * Display name of the container currently blocking extraction, or null if
+     * nothing is blocking. Used for the terminal's action-bar hint.
+     */
+    public String getMissingContainerName() {
+        if (template == null) return null;
+        ItemStack needed = getNeededContainer(template);
+        if (needed == null) return null;
+        TileEntityStorageCore core = getCore();
+        if (core != null && core.unifiedHasContainer(needed)) return null;
+        return needed.getDisplayName();
     }
 
     /**
@@ -160,7 +277,13 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
 
         if (!Objects.equals(Food.getInfusion(a), Food.getInfusion(b))) return false;
 
-        return Food.isYeasty(a) == Food.isYeasty(b);
+        if (Food.isYeasty(a) != Food.isYeasty(b)) return false;
+
+        // Bowl type must match: extraction refunds the bowl recorded in
+        // bowlMeta, so different bowl variants must never merge.
+        if (nbtInt(a, "bowlMeta") != nbtInt(b, "bowlMeta")) return false;
+
+        return true;
     }
 
     private static int[] orZero(int[] profile) {
@@ -172,18 +295,30 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
     }
 
     /**
-     * Absorbs a stack into the aggregate. Returns true only if the whole
-     * stack was consumed; anything else must be spilled by the caller.
+     * Absorbs a stack into the aggregate. Returns null when fully absorbed
+     * (or rotted away in catch-up), otherwise the leftover stack which the
+     * caller must return or spill — food is never voided. When over cap and
+     * a knife is available in system storage, absorbs the fitting part and
+     * returns the rest as a real leftover stack.
+     *
+     * @param automation true for hopper/pipe insertion (container foods
+     *                   gated by allowHopperContainerFood), false for the
+     *                   terminal path (container food always allowed).
      */
-    private boolean absorb(ItemStack is) {
-        if (!isStorableFood(is)) return false;
-        if (hasFoodContainer(is) && !EZConfiguration.allowHopperContainerFood) return false;
+    private ItemStack absorb(ItemStack is, boolean automation) {
+        if (!isStorableFood(is)) return is;
         // Temperature is stripped on insert (VOLATILE_KEYS): hot food may be
         // stored but cools instantly to ambient — the box never carries the
         // temperature key, so no mid-aggregate cooking/cooling happens in the
         // tick's virtual stack and extracts always come out unheated.
 
-        if (template != null && !keyMatches(template, is)) return false;
+        // Container gate: terminal always allows container food (the container
+        // is stripped into system storage below); hoppers/pipes only when
+        // configured.
+        ItemStack container = getNeededContainer(is);
+        if (container != null && automation && !EZConfiguration.allowHopperContainerFood) return is;
+
+        if (template != null && !keyMatches(template, is)) return is;
 
         // Per-stack decay normalization: advance the incoming stack's private
         // decay clock to "now" BEFORE merging. Without this, a stack carrying
@@ -204,14 +339,24 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
             int guard = TFCOptions.decayProtectionDays * 24 + 48;
             while (Food.getDecayTimer(normalized) < now && guard-- > 0) {
                 normalized = TFC_Core.tickDecay(normalized, worldObj, xCoord, yCoord, zCoord, 1.0f, 1.0f);
-                if (normalized == null || normalized.stackSize <= 0) return false; // rotted away on catch-up
+                if (normalized == null || normalized.stackSize <= 0) return is; // rotted away on catch-up
             }
         }
 
         float w = Food.getWeight(normalized);
 
         int cap = EZConfiguration.foodStorageCapOz;
-        if (cap > 0 && totalWeight + w > cap) return false;
+        float toAbsorb = w;
+        if (cap > 0 && totalWeight + w > cap) {
+            float space = cap - totalWeight;
+            if (space >= 1.0f && !isNoSplit(is) && hasKnifeCached()) {
+                toAbsorb = space; // knife split: absorb what fits
+            } else {
+                return is; // over cap, no split possible
+            }
+        }
+
+        float scale = toAbsorb / w;
 
         if (template == null) {
             template = stripVolatileKeys(is);
@@ -220,25 +365,58 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
 
         int[] taste = Food.getFoodTasteProfile(is);
         for (int i = 0; i < 5; i++) {
-            tasteSum[i] += w * taste[i];
+            tasteSum[i] += toAbsorb * taste[i];
         }
-        totalWeight += w;
-        totalDecay += Food.getDecay(normalized);
+        totalWeight += toAbsorb;
+        totalDecay += Food.getDecay(normalized) * scale;
         decayTimer = Math.min(decayTimer, Food.getDecayTimer(normalized));
 
+        if (container != null) {
+            depositContainer(container);
+        }
+
+        if (toAbsorb < w) {
+            // Knife-split leftover: return the rest as a real stack so the
+            // caller can hand it back / spill it — never void food.
+            // Decay BEFORE weight: the copy still carries the full decay d,
+            // and setWeight(lo, w - toAbsorb) would destroy the stack when
+            // d > w - toAbsorb (heavily decayed stack, small space). The
+            // scaled share d*(1-scale) is below both the remaining weight
+            // and the current full weight, so both setters are safe.
+            ItemStack leftover = normalized.copy();
+            Food.setDecay(leftover, Food.getDecay(normalized) * (1 - scale));
+            Food.setWeight(leftover, w - toAbsorb);
+            onChange();
+            return leftover;
+        }
+
         onChange();
-        return true;
+        return null;
+    }
+
+    /**
+     * Terminal-path absorb: container foods allowed, leftovers handed back
+     * to the caller (provider.input returns them to the pipeline).
+     */
+    public ItemStack absorbTerminal(ItemStack is) {
+        return absorb(is, false);
     }
 
     /**
      * Extracts up to the requested weight in oz as a brand-new stack. In
      * "intact" mode only undecayed weight comes out and the rot stays behind;
      * in "proportional" mode the extracted portion carries its share of decay.
+     *
+     * @param payContainer true to consume one container from system storage
+     *                     when the food needs one (direct single-box paths);
+     *                     false for the unified multi-box path, which pays
+     *                     exactly ONE container for the merged result stack
+     *                     instead of one per contributing box.
      */
-    private ItemStack extractOz(float requestedOz) {
+    private ItemStack extractOz(float requestedOz, boolean payContainer) {
         if (template == null || totalWeight <= 0) return null;
 
-        float maxPortion = Math.min(requestedOz, ((IFood) template.getItem()).getFoodMaxWeight(template));
+        float maxPortion = Math.min(requestedOz, getExtractCapOz(template));
 
         boolean proportional = "proportional".equals(EZConfiguration.decayExtractMode);
         float take;
@@ -256,6 +434,14 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
         }
 
         if (take <= 0) return null;
+
+        // Container food: every extracted stack must pay one container from
+        // system storage (stripped on insert). Blocked when none is available
+        // — the terminal surfaces a named hint in that case.
+        if (payContainer) {
+            if (!payContainerFromSystem(true)) return null;
+            lastPaidContainer = getNeededContainer(template); // refunded if a hopper write-back undoes this extraction
+        }
 
         ItemStack out = template.copy();
         out.stackSize = 1;
@@ -281,9 +467,9 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
         return out;
     }
 
-    /** Public absorb for the storage provider; true if fully absorbed. */
+    /** Public absorb for the storage provider; true iff fully absorbed. */
     public boolean tryAbsorb(ItemStack is) {
-        return absorb(is);
+        return absorbTerminal(is) == null;
     }
 
     /** Non-mutating absorb check (mirrors the absorb gate). */
@@ -294,7 +480,18 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
     /** Public weight-based extraction for the storage provider and terminal. */
     public ItemStack extractPortion(float oz) {
         if (template == null) return null;
-        return extractOz(oz);
+        return extractOz(oz, true);
+    }
+
+    /**
+     * Weight-based extraction WITHOUT paying a container, for the core's
+     * multi-box merge path: the merged result stack pays exactly one
+     * container from system storage (see
+     * {@code TileEntityStorageCore#unifiedConsumeContainer}), not one per box.
+     */
+    public ItemStack extractPortionNoPay(float oz) {
+        if (template == null) return null;
+        return extractOz(oz, false);
     }
 
     /** Public change notification for the storage provider. */
@@ -314,7 +511,11 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
         if (template == null || totalWeight <= 0) return null;
 
         ItemStack display = template.copy();
-        display.stackSize = Math.max(1, Math.round(totalWeight));
+        // Header/badge semantics: stackSize counts PORTIONS (how many single
+        // extracts the box holds), not raw oz — the terminal's top-right total
+        // then reads items + food portions instead of mixing ounces into the
+        // item count. The exact weight rides in NBT_WEIGHT (tooltip/badge).
+        display.stackSize = Math.max(1, Math.round(totalWeight / Math.max(getExtractCapOz(template), 1.0f)));
 
         NBTTagCompound tag = display.getTagCompound();
         if (tag == null) {
@@ -386,9 +587,129 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
     }
 
     private void onChange() {
+        // Invalidate the core's cached unified list: every aggregate mutation
+        // (absorb/extract/rot tick/clear) changes the baked display stack, and
+        // callers that bypass the core's unified ops (crafting-grid refill via
+        // provider.extract, direct hopper I/O) would otherwise ship a stale
+        // list to clients — wrong badge weights, wrong header counts, and a
+        // terminal row disagreeing with the real stack handed out.
+        TileEntityStorageCore core = getCore();
+        if (core != null) {
+            core.markUnifiedListDirty();
+        }
         if (worldObj != null) {
             worldObj.markTileEntityChunkModified(xCoord, yCoord, zCoord, this);
         }
+    }
+
+    // ////////////////////////////////////////////////////////////
+    // Knife presence cache (refreshed every 40 server ticks)
+    // ////////////////////////////////////////////////////////////
+
+    private boolean hasKnifeCached() {
+        return knifeCached;
+    }
+
+    /** True if any item in the given list is a TFC knife. */
+    private static boolean scanInventoryForKnife(List<ItemStack> items) {
+        for (ItemStack is : items) {
+            if (is != null && is.getItem() instanceof IKnife) return true;
+        }
+        return false;
+    }
+
+    private void refreshKnifeCache() {
+        TileEntityStorageCore core = getCore();
+        knifeCached = core != null && scanInventoryForKnife(core.getUnifiedItemList());
+    }
+
+    // ////////////////////////////////////////////////////////////
+    // Config-backed no-split blacklist & extract cap overrides (lazy parse)
+    // ////////////////////////////////////////////////////////////
+
+    private static final Logger LOGGER = LogManager.getLogger(Reference.MOD_ID);
+
+    /** True when the item can never be knife-split past the cap. */
+    private static boolean isNoSplit(ItemStack is) {
+        if (is.getItem() instanceof ItemSandwich || is.getItem() instanceof ItemSalad) return true;
+        return parsedNoSplitItems().contains(is.getItem());
+    }
+
+    private static Set<Item> parsedNoSplitItems() {
+        synchronized (TileEntityFoodStorage.class) {
+            if (noSplitItems == null) {
+                noSplitItems = new HashSet<>();
+                for (String entry : EZConfiguration.foodNoSplitBlacklist) {
+                    String id = entry.trim();
+                    if (id.isEmpty()) continue;
+                    Item item = GameRegistry.findItem(splitModId(id), splitName(id));
+                    if (item != null) {
+                        noSplitItems.add(item);
+                    } else {
+                        LOGGER.warn("Unknown item in foodNoSplitBlacklist, ignoring: {}", id);
+                    }
+                }
+            }
+            return noSplitItems;
+        }
+    }
+
+    /**
+     * Extract portion cap in oz for the given food: the config override if
+     * present, else the food's own max weight.
+     */
+    public static float getExtractCapOz(ItemStack templateLike) {
+        Integer override = parsedExtractCaps().get(templateLike.getItem());
+        if (override != null) return override;
+        return ((IFood) templateLike.getItem()).getFoodMaxWeight(templateLike);
+    }
+
+    private static Map<Item, Integer> parsedExtractCaps() {
+        synchronized (TileEntityFoodStorage.class) {
+            if (extractCaps == null) {
+                extractCaps = new HashMap<>();
+                for (String entry : EZConfiguration.foodExtractCapOverrides) {
+                    String id = entry.trim();
+                    if (id.isEmpty()) continue;
+                    int eq = id.lastIndexOf('=');
+                    if (eq <= 0 || eq == id.length() - 1) {
+                        LOGGER.warn("Malformed foodExtractCapOverrides entry, ignoring: {}", id);
+                        continue;
+                    }
+                    Integer oz;
+                    try {
+                        oz = Integer.parseInt(
+                            id.substring(eq + 1)
+                                .trim());
+                    } catch (NumberFormatException e) {
+                        LOGGER.warn("Invalid oz value in foodExtractCapOverrides, ignoring: {}", id);
+                        continue;
+                    }
+                    Item item = GameRegistry.findItem(splitModId(id.substring(0, eq)), splitName(id.substring(0, eq)));
+                    if (item != null) {
+                        extractCaps.put(item, oz);
+                    } else {
+                        LOGGER.warn("Unknown item in foodExtractCapOverrides, ignoring: {}", id);
+                    }
+                }
+            }
+            return extractCaps;
+        }
+    }
+
+    private static String splitModId(String modidName) {
+        int colon = modidName.indexOf(':');
+        return colon > 0 ? modidName.substring(0, colon) : "minecraft";
+    }
+
+    private static String splitName(String modidName) {
+        int colon = modidName.indexOf(':');
+        return colon > 0 ? modidName.substring(colon + 1) : modidName;
+    }
+
+    private static int nbtInt(ItemStack is, String key) {
+        NBTTagCompound t = is.getTagCompound();
+        return t != null && t.hasKey(key) ? t.getInteger(key) : -1;
     }
 
     @Override
@@ -397,6 +718,14 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
         // Hopper suction is synchronous within one hopper tick; anything not
         // reconciled by now is stale.
         restoreValid = false;
+        lastPaidContainer = null;
+        // Refresh the "system storage has a knife" cache every 40 ticks even
+        // when the box is empty (knife-splitting matters most on insert into
+        // an empty/near-full box).
+        if (--knifeCheckTimer <= 0) {
+            knifeCheckTimer = 40;
+            refreshKnifeCache();
+        }
         if (template == null || totalWeight <= 0) return;
 
         ItemStack[] arr = new ItemStack[] { materialize() };
@@ -441,6 +770,9 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
     @Override
     public ItemStack decrStackSize(int slot, int amount) {
         if (slot == SLOT_AGGREGATE) {
+            // The container paid by the extraction this hopper is about to
+            // attempt is only refundable for THIS extraction attempt.
+            lastPaidContainer = null;
             if (worldObj != null && !worldObj.isRemote && template != null && totalWeight > 0) {
                 preExtractTemplate = template;
                 preExtractWeight = totalWeight;
@@ -454,7 +786,7 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
                 restoreValid = false;
             }
             lastViewWeight = -1.0f;
-            return extractOz(EZConfiguration.hopperExtractOz * amount);
+            return extractOz(EZConfiguration.hopperExtractOz * amount, true);
         }
         return null;
     }
@@ -463,8 +795,9 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
     public void setInventorySlotContents(int slot, ItemStack stack) {
         if (slot == SLOT_INPUT) {
             if (stack != null && stack.stackSize > 0) {
-                if (!absorb(stack)) {
-                    spill(stack);
+                ItemStack left = absorb(stack, true);
+                if (left != null) {
+                    spill(left);
                 }
             }
             return;
@@ -485,6 +818,14 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
             decayTimer = preExtractTimer;
             System.arraycopy(preExtractTaste, 0, tasteSum, 0, tasteSum.length);
             restoreValid = false;
+            // The extraction consumed a container from system storage; the
+            // write-back means the food portion never left, so the container
+            // must go back — re-input it, spilling only if storage filled
+            // meanwhile (the correct no-voiding fallback).
+            if (lastPaidContainer != null) {
+                depositContainer(lastPaidContainer);
+                lastPaidContainer = null;
+            }
             onChange();
         }
     }
@@ -525,10 +866,17 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
     public boolean isItemValidForSlot(int slot, ItemStack stack) {
         if (slot != SLOT_INPUT || stack == null) return false;
         if (!isStorableFood(stack)) return false;
-        if (hasFoodContainer(stack) && !EZConfiguration.allowHopperContainerFood) return false;
+        // Automation semantics (this gate backs canInsertItem/hoppers).
+        ItemStack container = getNeededContainer(stack);
+        if (container != null && !EZConfiguration.allowHopperContainerFood) return false;
         if (template != null && !keyMatches(template, stack)) return false;
         int cap = EZConfiguration.foodStorageCapOz;
-        if (cap > 0 && totalWeight + Food.getWeight(stack) > cap) return false;
+        if (cap > 0 && totalWeight + Food.getWeight(stack) > cap) {
+            // Over cap is only acceptable when a knife split could absorb
+            // the fitting part.
+            float space = cap - totalWeight;
+            if (!(space >= 1.0f && !isNoSplit(stack) && hasKnifeCached())) return false;
+        }
         return true;
     }
 
@@ -549,7 +897,11 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
     @Override
     public boolean canExtractItem(int slot, ItemStack stack, int side) {
         if (slot != SLOT_AGGREGATE || stack == null) return false;
-        return template != null && (!hasFoodContainer(stack) || EZConfiguration.allowHopperContainerFood);
+        if (template == null) return false;
+        if (!hasFoodContainer(stack)) return true;
+        if (!EZConfiguration.allowHopperContainerFood) return false;
+        // Container food: also require a payable container in system storage.
+        return payContainerFromSystem(false);
     }
 
     // ////////////////////////////////////////////////////////////

@@ -81,9 +81,17 @@ public class EZConfiguration {
     @Config.DefaultString("intact")
     public static String decayExtractMode;
 
-    @Config.Comment("Allow container foods (bowls, etc.) to move through hoppers/pipes in and out of food storage boxes. Container stripping/refund itself arrives in a later phase.")
+    @Config.Comment("Allow container foods (bowls, etc.) to move through hoppers/pipes in and out of food storage boxes. Containers are stripped into the box's cache on insert and consumed from it on extract; terminal always allows container foods.")
     @Config.DefaultBoolean(false)
     public static boolean allowHopperContainerFood;
+
+    @Config.Comment("Items that can never be knife-split when inserted into a food storage box past its cap. Format: modid:itemname per entry. Unknown entries are logged and ignored. Sandwiches and salads are always non-splittable.")
+    @Config.DefaultStringList({})
+    public static String[] foodNoSplitBlacklist;
+
+    @Config.Comment("Per-item extract portion cap overrides in oz. Format: modid:itemname=oz per entry. Unknown entries are logged and ignored. Default caps come from each food's own max weight (sandwich 10, salad 20, soup 24, meal 20, plain 160).")
+    @Config.DefaultStringList({})
+    public static String[] foodExtractCapOverrides;
 
     public static void init() {
         try {

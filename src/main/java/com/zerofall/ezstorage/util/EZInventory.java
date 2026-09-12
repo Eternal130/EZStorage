@@ -13,13 +13,16 @@ import net.minecraft.item.ItemTool;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 
+import com.dunk.tfc.Items.Pottery.ItemPotteryBase;
 import com.dunk.tfc.Items.Tools.ItemTerraTool;
 import com.dunk.tfc.Items.Tools.ItemWeapon;
 import com.dunk.tfc.api.Enums.EnumSize;
 import com.dunk.tfc.api.Interfaces.IFood;
 import com.dunk.tfc.api.Interfaces.ISize;
+import com.dunk.tfc.api.Tools.IKnife;
 import com.zerofall.ezstorage.EZStorage;
 import com.zerofall.ezstorage.configuration.EZConfiguration;
+import com.zerofall.ezstorage.tileentity.TileEntityFoodStorage;
 
 public class EZInventory {
 
@@ -269,7 +272,17 @@ public class EZInventory {
     public int getIndexOf(ItemStack itemStack) {
         ensureDisplayList();
         for (int i = 0; i < displayList.size(); i++) {
-            if (stacksEqual(displayList.get(i), itemStack)) {
+            ItemStack entry = displayList.get(i);
+            if (stacksEqual(entry, itemStack)) {
+                return i;
+            }
+            // Food aggregate display stacks bake volatile values (weight,
+            // decay, taste) into NBT; a GUI row updated in place while shift
+            // is held carries stale NBT, so full-NBT equality fails and the
+            // click would be silently swallowed. Match aggregates by the
+            // stable food identity key instead.
+            if (TileEntityFoodStorage.isFoodAggregate(entry) && TileEntityFoodStorage.isFoodAggregate(itemStack)
+                && TileEntityFoodStorage.keyMatches(entry, itemStack)) {
                 return i;
             }
         }
@@ -443,6 +456,14 @@ public class EZInventory {
         Item item = itemStack.getItem();
 
         if (item instanceof IFood) return false;
+
+        // TFC knives must be storable so food boxes can use them for cap-splitting (design 2.16)
+        if (item instanceof IKnife) return true;
+
+        // Container items must be storable: food boxes route stripped containers
+        // (pottery bowls/jugs, vanilla-style container items) into system storage
+        // (design 2.15) and consume them back on extraction.
+        if (item instanceof ItemPotteryBase || item.getContainerItem(itemStack) != null) return true;
 
         if ((item instanceof ItemTool || item instanceof ItemTerraTool
             || item instanceof ItemWeapon

@@ -25,6 +25,11 @@ public class FoodStorageProvider implements IStorageProvider {
         this.te = te;
     }
 
+    /** The backing food storage tile entity. */
+    public TileEntityFoodStorage getTe() {
+        return te;
+    }
+
     @Override
     public boolean isValid() {
         return !te.isInvalid() && te.getWorldObj() != null
@@ -34,7 +39,7 @@ public class FoodStorageProvider implements IStorageProvider {
 
     @Override
     public ItemStack input(ItemStack itemStack) {
-        return te.tryAbsorb(itemStack) ? null : itemStack;
+        return te.absorbTerminal(itemStack);
     }
 
     @Override

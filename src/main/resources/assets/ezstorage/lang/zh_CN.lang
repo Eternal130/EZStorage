@@ -48,3 +48,4 @@ hud.msg.ezstorage.amount_count=%s / %s
 tile.food_storage.name=食物存储箱
 hud.msg.ezstorage.food.totalweight=总重: %s oz / %s oz
 hud.msg.ezstorage.food.decay=腐烂: %s oz（%s%%）
+chat.msg.ezstorage.food.need_container=需要：%s

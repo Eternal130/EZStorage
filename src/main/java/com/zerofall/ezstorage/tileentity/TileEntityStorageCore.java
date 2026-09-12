@@ -71,9 +71,8 @@ public class TileEntityStorageCore extends TileEntity {
         super.invalidate();
     }
 
-    private void markUnifiedListDirty() {
+    public void markUnifiedListDirty() {
         unifiedListDirty = true;
-        cachedUnifiedList = null;
     }
 
     public EZInventory getInventory() {
@@ -537,7 +536,9 @@ public class TileEntityStorageCore extends TileEntity {
      * Weight-based extraction for food aggregates. Pulls the requested ounces
      * from every food box whose display stack matches the unified entry,
      * merging the parts into ONE legal stack (total decay stays below total
-     * weight because parts are merged weight-first).
+     * weight because parts are merged weight-first). Container foods pay
+     * exactly ONE container for the merged result stack, consumed from system
+     * storage — not one per contributing box.
      */
     public ItemStack unifiedExtractOz(int unifiedIndex, float requestedOz) {
         if (unifiedIndex < 0 || requestedOz <= 0) return null;
@@ -549,18 +550,27 @@ public class TileEntityStorageCore extends TileEntity {
         if (!TileEntityFoodStorage.isFoodAggregate(target)) return null;
         if (!(target.getItem() instanceof IFood)) return null;
 
-        float maxPortion = ((IFood) target.getItem()).getFoodMaxWeight(target);
+        // Config override aware (defaults to the food's own max weight):
+        // caps both each box's part and the merged result stack.
+        float maxPortion = TileEntityFoodStorage.getExtractCapOz(target);
         float remaining = Math.min(requestedOz, maxPortion);
+
+        // Container pre-check: the merged stack pays one container from system
+        // storage; extraction is blocked when none is available (checked
+        // before any state mutation, so a miss never voids partial parts).
+        ItemStack neededContainer = TileEntityFoodStorage.getNeededContainer(target);
+        if (neededContainer != null && !unifiedHasContainer(neededContainer)) return null;
 
         ItemStack result = null;
         for (IStorageProvider provider : providers) {
             if (!provider.isValid() || remaining <= 0.001f) continue;
-            if (!(provider instanceof FoodStorageProvider)) continue;
+            if (!(provider instanceof FoodStorageProvider foodProvider)) continue;
 
             int localIndex = findItemIndex(provider, target);
             if (localIndex < 0) continue;
 
-            ItemStack part = ((FoodStorageProvider) provider).extractPortion(remaining);
+            ItemStack part = foodProvider.getTe()
+                .extractPortionNoPay(remaining);
             if (part == null || part.stackSize <= 0) continue;
 
             if (result == null) {
@@ -575,10 +585,47 @@ public class TileEntityStorageCore extends TileEntity {
         }
 
         if (result != null) {
+            // Pay one container for the merged stack from system storage.
+            // Defensive: single-threaded so the pre-check above makes this
+            // unreachable, but a miss must never void the extracted food.
+            if (neededContainer != null && !unifiedConsumeContainer(neededContainer)) {
+                unifiedInput(result);
+                return null;
+            }
             markUnifiedListDirty();
             return result;
         }
         return null;
+    }
+
+    /** True when at least one matching container (item+damage+NBT) is available across providers. */
+    public boolean unifiedHasContainer(ItemStack needed) {
+        for (IStorageProvider provider : providers) {
+            if (!provider.isValid()) continue;
+            List<ItemStack> items = provider.getAllItems();
+            for (ItemStack item : items) {
+                if (item != null && EZInventory.stacksEqual(item, needed)) return true;
+            }
+        }
+        return false;
+    }
+
+    /** Consumes exactly one matching container from the providers; false if none available. */
+    public boolean unifiedConsumeContainer(ItemStack needed) {
+        for (IStorageProvider provider : providers) {
+            if (!provider.isValid()) continue;
+            List<ItemStack> items = provider.getAllItems();
+            for (int i = 0; i < items.size(); i++) {
+                if (items.get(i) != null && EZInventory.stacksEqual(items.get(i), needed)) {
+                    ItemStack taken = provider.extractExact(i, 1);
+                    if (taken != null && taken.stackSize > 0) {
+                        markUnifiedListDirty();
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     public boolean isPartOfMultiblock(BlockRef blockRef) {
@@ -588,6 +635,27 @@ public class TileEntityStorageCore extends TileEntity {
             }
         }
         return false;
+    }
+
+    /**
+     * Returns the display name of the container missing for extraction of the
+     * food aggregate at the given unified index, or null if nothing is
+     * blocking.
+     */
+    public String getMissingContainerForUnified(int unifiedIndex) {
+        if (unifiedIndex < 0) return null;
+        List<ItemStack> unified = getUnifiedItemList();
+        if (unifiedIndex >= unified.size()) return null;
+        ItemStack target = unified.get(unifiedIndex);
+        if (!TileEntityFoodStorage.isFoodAggregate(target)) return null;
+        for (IStorageProvider provider : providers) {
+            if (!provider.isValid() || !(provider instanceof FoodStorageProvider)) continue;
+            if (findItemIndex(provider, target) < 0) continue;
+            String name = ((FoodStorageProvider) provider).getTe()
+                .getMissingContainerName();
+            if (name != null) return name;
+        }
+        return null;
     }
 
     @Override
