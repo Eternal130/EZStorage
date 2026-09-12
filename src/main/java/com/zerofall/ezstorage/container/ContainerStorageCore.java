@@ -1,6 +1,7 @@
 package com.zerofall.ezstorage.container;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -13,6 +14,8 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.network.play.server.S2FPacketSetSlot;
 import net.minecraft.network.play.server.S30PacketWindowItems;
 
+import com.dunk.tfc.api.Constant.Global;
+import com.zerofall.ezstorage.tileentity.TileEntityFoodStorage;
 import com.zerofall.ezstorage.tileentity.TileEntityStorageCore;
 import com.zerofall.ezstorage.util.EZInventory;
 import com.zerofall.ezstorage.util.EZInventoryManager;
@@ -91,6 +94,23 @@ public class ContainerStorageCore extends Container {
         return super.slotClick(slotId, clickedButton, mode, playerIn);
     }
 
+    /**
+     * Extracts from the core, routing food aggregate entries through the
+     * weight-based path. Plain terminal clicks land here with
+     * left=160oz/right=80oz (both capped by the item's max portion and the
+     * stored amount), while normal items keep vanilla stack semantics.
+     */
+    private ItemStack extractViaCore(int itemIndex, int clickedButton, int mode) {
+        List<ItemStack> unified = coreTileEntity.getUnifiedItemList();
+        if (itemIndex >= 0 && itemIndex < unified.size()
+            && TileEntityFoodStorage.isFoodAggregate(unified.get(itemIndex))) {
+            float oz = clickedButton == 1 ? Global.FOOD_MAX_WEIGHT * 0.5f : Global.FOOD_MAX_WEIGHT;
+            return coreTileEntity.unifiedExtractOz(itemIndex, oz);
+        }
+        int type = clickedButton == 1 ? 1 : 0;
+        return coreTileEntity.unifiedExtract(itemIndex, type);
+    }
+
     public ItemStack customSlotClick(int slotId, int clickedButton, int mode, EntityPlayer playerIn) {
         int itemIndex = slotId;
         ItemStack heldStack = playerIn.inventory.getItemStack();
@@ -102,7 +122,7 @@ public class ContainerStorageCore extends Container {
             if (mode == 2) {
                 ItemStack all;
                 if (coreTileEntity != null) {
-                    all = coreTileEntity.unifiedExtract(itemIndex, 0);
+                    all = extractViaCore(itemIndex, 0, 2);
                 } else {
                     all = this.inventory.extractAll(itemIndex);
                 }
@@ -125,7 +145,7 @@ public class ContainerStorageCore extends Container {
             }
             ItemStack stack;
             if (coreTileEntity != null) {
-                stack = coreTileEntity.unifiedExtract(itemIndex, type);
+                stack = extractViaCore(itemIndex, clickedButton, mode);
             } else {
                 stack = this.inventory.getItemsAt(itemIndex, type);
             }

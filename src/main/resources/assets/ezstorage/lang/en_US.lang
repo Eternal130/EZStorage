@@ -47,3 +47,5 @@ hud.msg.ezstorage.savesearch.on=Save Search: ON
 hud.msg.ezstorage.savesearch.off=Save Search: OFF
 hud.msg.ezstorage.amount_count=%s / %s
 tile.food_storage.name=Food Storage Box
+hud.msg.ezstorage.food.totalweight=Total: %s oz / %s oz
+hud.msg.ezstorage.food.decay=Decay: %s oz (%s%%)

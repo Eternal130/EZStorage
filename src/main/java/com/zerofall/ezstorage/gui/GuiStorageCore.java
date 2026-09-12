@@ -30,6 +30,7 @@ import net.minecraft.world.World;
 import org.lwjgl.input.Mouse;
 import org.lwjgl.opengl.GL11;
 
+import com.dunk.tfc.Food.ItemFoodTFC;
 import com.zerofall.ezstorage.EZStorage;
 import com.zerofall.ezstorage.Reference;
 import com.zerofall.ezstorage.configuration.EZConfiguration;
@@ -41,6 +42,7 @@ import com.zerofall.ezstorage.integration.ModIds;
 import com.zerofall.ezstorage.network.client.MsgBulkImport;
 import com.zerofall.ezstorage.network.client.MsgDropItem;
 import com.zerofall.ezstorage.network.client.MsgInvSlotClicked;
+import com.zerofall.ezstorage.tileentity.TileEntityFoodStorage;
 import com.zerofall.ezstorage.util.EZInventory;
 import com.zerofall.ezstorage.util.EZItemRenderer;
 import com.zerofall.ezstorage.util.ItemStackCountComparator;
@@ -302,6 +304,42 @@ public class GuiStorageCore extends GuiContainer {
         super.drawScreen(mouseX, mouseY, partialTicks);
         cacheMouseOverItem(mouseX, mouseY);
         drawSideButtonTooltips(mouseX, mouseY);
+        drawFoodTooltip(mouseX, mouseY);
+    }
+
+    /**
+     * Draws the extended tooltip for food aggregate stacks: total weight,
+     * decay, and TFC skill-tiered taste lines via the baked average mods.
+     * Skipped when NEI is present because NEI already renders its own tooltip
+     * for the hovered stack.
+     */
+    private void drawFoodTooltip(int mouseX, int mouseY) {
+        if (ModIds.NEI.isLoaded()) return;
+        ItemStack over = getMouseOverItem();
+        if (!TileEntityFoodStorage.isFoodAggregate(over)) return;
+        List<String> tip = new ArrayList<>();
+        tip.add(over.getDisplayName());
+        NBTTagCompound tag = over.getTagCompound();
+        // TFC-style weight line: exact aggregate total (float NBT) against the
+        // full portion size, matching TFC's "160.0 oz / 160.0 oz" phrasing.
+        float totalOz = tag.getFloat(TileEntityFoodStorage.NBT_WEIGHT);
+        if (totalOz <= 0) totalOz = over.stackSize;
+        tip.add(
+            StatCollector.translateToLocalFormatted(
+                "hud.msg.ezstorage.food.totalweight",
+                String.format("%.1f", totalOz),
+                String.format("%.1f", com.dunk.tfc.api.Constant.Global.FOOD_MAX_WEIGHT)));
+        if (tag.hasKey(TileEntityFoodStorage.NBT_DECAY)) {
+            int decayOz = tag.getInteger(TileEntityFoodStorage.NBT_DECAY);
+            if (decayOz > 0) {
+                String pct = String.format("%.1f", decayOz * 100.0f / Math.max(totalOz, 0.01f));
+                tip.add(
+                    StatCollector
+                        .translateToLocalFormatted("hud.msg.ezstorage.food.decay", String.valueOf(decayOz), pct));
+            }
+        }
+        ItemFoodTFC.addTasteInformation(over, this.mc.thePlayer, tip);
+        func_146283_a(tip, mouseX, mouseY);
     }
 
     private void drawSideButtons(int mouseX, int mouseY) {
@@ -405,7 +443,9 @@ public class GuiStorageCore extends GuiContainer {
                     if (font == null) font = fontRendererObj;
                     RenderHelper.enableGUIStandardItemLighting();
                     itemRender.renderItemAndEffectIntoGUI(font, this.mc.getTextureManager(), stack, x, y);
-                    ezRenderer.renderItemOverlayIntoGUI(font, stack, x, y, "" + stack.stackSize);
+                    String badge = TileEntityFoodStorage.isFoodAggregate(stack) ? stack.stackSize + " oz"
+                        : "" + stack.stackSize;
+                    ezRenderer.renderItemOverlayIntoGUI(font, stack, x, y, badge);
                 }
                 x += 18;
             }

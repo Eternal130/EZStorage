@@ -46,3 +46,5 @@ hud.msg.ezstorage.savesearch.on=保存搜索: 开
 hud.msg.ezstorage.savesearch.off=保存搜索: 关
 hud.msg.ezstorage.amount_count=%s / %s
 tile.food_storage.name=食物存储箱
+hud.msg.ezstorage.food.totalweight=总重: %s oz / %s oz
+hud.msg.ezstorage.food.decay=腐烂: %s oz（%s%%）

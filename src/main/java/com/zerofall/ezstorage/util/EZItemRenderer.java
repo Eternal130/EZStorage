@@ -22,6 +22,14 @@ public class EZItemRenderer extends RenderItem {
             boolean unicodeFlag = fr.getUnicodeFlag();
             fr.setUnicodeFlag(false);
 
+            // Optional unit suffix (e.g. " oz" for food aggregate weights):
+            // strip before parsing, re-append to the rendered string.
+            String suffix = "";
+            if (text.endsWith(" oz")) {
+                suffix = " oz";
+                text = text.substring(0, text.length() - suffix.length());
+            }
+
             long amount = Long.parseLong(text);
 
             if (amount > 999999999999L) amount = 999999999999L;
@@ -58,9 +66,9 @@ public class EZItemRenderer extends RenderItem {
             GL11.glScaled(ScaleFactor, ScaleFactor, ScaleFactor);
             String var6;
             if (ModIds.NEI.isLoaded()) {
-                var6 = ReadableNumberConverter.INSTANCE.toWideReadableForm(amount);
+                var6 = ReadableNumberConverter.INSTANCE.toWideReadableForm(amount) + suffix;
             } else {
-                var6 = String.valueOf(amount);
+                var6 = String.valueOf(amount) + suffix;
             }
             int X = (int) (((float) xPosition + offset + 15.0f - fr.getStringWidth(var6) * ScaleFactor) * RScaleFactor);
             int Y = (int) (((float) yPosition + offset + 15.0f - 7.0f * ScaleFactor) * RScaleFactor);

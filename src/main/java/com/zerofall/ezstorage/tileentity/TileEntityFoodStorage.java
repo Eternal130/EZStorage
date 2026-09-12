@@ -16,7 +16,7 @@ import com.dunk.tfc.Core.TFC_Core;
 import com.dunk.tfc.Core.TFC_Time;
 import com.dunk.tfc.api.Food;
 import com.dunk.tfc.api.Interfaces.IFood;
-
+import com.dunk.tfc.api.TFCOptions;
 import com.zerofall.ezstorage.configuration.EZConfiguration;
 
 /**
@@ -42,10 +42,18 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
     /** Slot index of the aggregate view slot. */
     public static final int SLOT_AGGREGATE = 1;
 
+    /** NBT marker identifying a food aggregate display stack. */
+    public static final String NBT_MARKER = "ezFoodAggregate";
+    /** NBT key on display stacks holding the total decay in oz for tooltips. */
+    public static final String NBT_DECAY = "ezFoodDecay";
+
+    /** Display-stack NBT key carrying the exact aggregate weight (float oz). */
+    public static final String NBT_WEIGHT = "ezFoodWeight";
+
     /** Volatile root-NBT keys stripped from the identity template. */
     private static final String[] VOLATILE_KEYS = { "foodWeight", "foodDecay", "decayTimer", "tasteSweetMod",
         "tasteSourMod", "tasteSaltyMod", "tasteBitterMod", "tasteUmamiMod", "tasteSweet", "tasteSour", "tasteSalty",
-        "tasteBitter", "tasteUmami", "mealSkill" };
+        "tasteBitter", "tasteUmami", "mealSkill", "temperature" };
 
     /** Identity: real stack copy with volatile keys stripped. */
     private ItemStack template;
@@ -76,6 +84,16 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
     private boolean restoreValid = false;
 
     /**
+     * Checks whether the given stack is a food aggregate display stack
+     * (carries the {@link #NBT_MARKER} tag).
+     */
+    public static boolean isFoodAggregate(ItemStack is) {
+        return is != null && is.getTagCompound() != null
+            && is.getTagCompound()
+                .hasKey(NBT_MARKER);
+    }
+
+    /**
      * Checks whether the given stack is food this box can store: a single item
      * implementing TFC's IFood with a positive weight.
      */
@@ -104,6 +122,15 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
         if (tag != null) {
             for (String key : VOLATILE_KEYS) {
                 tag.removeTag(key);
+            }
+            // Smoke progress (in the "Processing Tag" sub-compound) is reset on
+            // insert (user decision): partially smoked food stores fine, but
+            // extracts always come out unsmoked — smoking restarts from zero
+            // on the rack. Completed smokes are unaffected (their effect lives
+            // in FuelProfile, an equality key).
+            NBTTagCompound procTag = tag.getCompoundTag(Food.PROCESSING_TAG);
+            if (tag.hasKey(Food.PROCESSING_TAG)) {
+                procTag.removeTag(Food.SMOKE_COUNTER_TAG);
             }
         }
         return copy;
@@ -151,19 +178,44 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
     private boolean absorb(ItemStack is) {
         if (!isStorableFood(is)) return false;
         if (hasFoodContainer(is) && !EZConfiguration.allowHopperContainerFood) return false;
+        // Temperature is stripped on insert (VOLATILE_KEYS): hot food may be
+        // stored but cools instantly to ambient — the box never carries the
+        // temperature key, so no mid-aggregate cooking/cooling happens in the
+        // tick's virtual stack and extracts always come out unheated.
 
-        float w = Food.getWeight(is);
-
-        // Validate everything before committing any state, so a rejected
-        // insert into an empty box does not leave the template locked.
         if (template != null && !keyMatches(template, is)) return false;
+
+        // Per-stack decay normalization: advance the incoming stack's private
+        // decay clock to "now" BEFORE merging. Without this, a stack carrying
+        // a stale decayTimer (e.g. kept in an unloaded chunk) drags the
+        // aggregate's clock backward via the min() below, and the catch-up
+        // decay for its whole elapsed backlog then applies to the ENTIRE
+        // merged mass — proportionally amplifying the aggregate's decay ratio
+        // 10-25x and "rotting" freshly stored food almost instantly. Catching
+        // the stack up alone first restores vanilla per-stack semantics: each
+        // stack pays only its own backlog (TFC's decayProtection clamps huge
+        // gaps to 24h, so the loop converges in a bounded number of hours).
+        ItemStack normalized = is.copy();
+        if (worldObj != null) {
+            int now = (int) TFC_Time.getTotalHours();
+            // Worst case one iteration per hour of gap; any gap beyond
+            // decayProtectionDays is clamped to 24h by tickDecay itself, so
+            // protection-days*24 + slack bounds the loop for any config.
+            int guard = TFCOptions.decayProtectionDays * 24 + 48;
+            while (Food.getDecayTimer(normalized) < now && guard-- > 0) {
+                normalized = TFC_Core.tickDecay(normalized, worldObj, xCoord, yCoord, zCoord, 1.0f, 1.0f);
+                if (normalized == null || normalized.stackSize <= 0) return false; // rotted away on catch-up
+            }
+        }
+
+        float w = Food.getWeight(normalized);
 
         int cap = EZConfiguration.foodStorageCapOz;
         if (cap > 0 && totalWeight + w > cap) return false;
 
         if (template == null) {
             template = stripVolatileKeys(is);
-            decayTimer = Food.getDecayTimer(is);
+            decayTimer = Food.getDecayTimer(normalized);
         }
 
         int[] taste = Food.getFoodTasteProfile(is);
@@ -171,8 +223,8 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
             tasteSum[i] += w * taste[i];
         }
         totalWeight += w;
-        totalDecay += Food.getDecay(is);
-        decayTimer = Math.min(decayTimer, Food.getDecayTimer(is));
+        totalDecay += Food.getDecay(normalized);
+        decayTimer = Math.min(decayTimer, Food.getDecayTimer(normalized));
 
         onChange();
         return true;
@@ -210,6 +262,9 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
         Food.setWeight(out, take);
         Food.setDecay(out, outDecay);
         Food.setDecayTimer(out, (int) TFC_Time.getTotalHours());
+        // Rewrite taste to the weighted average (design 2.5): must run before
+        // the aggregate totals below are mutated.
+        bakeAverageTaste(out);
 
         float ratio = totalWeight > 0 ? (totalWeight - take) / totalWeight : 0;
         totalWeight -= take;
@@ -224,6 +279,88 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
 
         onChange();
         return out;
+    }
+
+    /** Public absorb for the storage provider; true if fully absorbed. */
+    public boolean tryAbsorb(ItemStack is) {
+        return absorb(is);
+    }
+
+    /** Non-mutating absorb check (mirrors the absorb gate). */
+    public boolean canAbsorb(ItemStack is) {
+        return isItemValidForSlot(SLOT_INPUT, is);
+    }
+
+    /** Public weight-based extraction for the storage provider and terminal. */
+    public ItemStack extractPortion(float oz) {
+        if (template == null) return null;
+        return extractOz(oz);
+    }
+
+    /** Public change notification for the storage provider. */
+    public void onChangeLike() {
+        onChange();
+    }
+
+    /**
+     * Builds the terminal display stack: identity template + aggregate
+     * marker + baked weighted-average taste mods, with stackSize = total oz.
+     * Taste is baked as mod = round(avg - probe) where probe is the value
+     * read from the template (base + cook/smoke profiles, since all taste
+     * keys were stripped), so the vanilla getter chain displays the exact
+     * weighted average for both plain foods and meals.
+     */
+    public ItemStack getDisplayStack() {
+        if (template == null || totalWeight <= 0) return null;
+
+        ItemStack display = template.copy();
+        display.stackSize = Math.max(1, Math.round(totalWeight));
+
+        NBTTagCompound tag = display.getTagCompound();
+        if (tag == null) {
+            tag = new NBTTagCompound();
+            display.setTagCompound(tag);
+        }
+        tag.setBoolean(NBT_MARKER, true);
+        tag.setInteger(NBT_DECAY, Math.round(totalDecay));
+
+        // Bake weight/decay so TFC's FoodItemRenderer (registered per-item,
+        // INVENTORY type) draws its two overlay bars on this stack in GUIs:
+        // white weight bar = one max portion's fill (clamped so the ratio
+        // stays in [0,1]; TFC skips bars outside that range), decay bar =
+        // the aggregate decay ratio (fresh/negative clamped to zero = full
+        // green bar). The exact total for tooltips rides in NBT_WEIGHT.
+        float maxPortion = ((IFood) template.getItem()).getFoodMaxWeight(template);
+        float barWeight = Math.min(totalWeight, maxPortion);
+        Food.setWeight(display, barWeight);
+        float decayRatio = Math.max(totalDecay / totalWeight, 0.0f);
+        Food.setDecay(display, decayRatio * barWeight);
+        tag.setFloat(NBT_WEIGHT, totalWeight);
+
+        bakeAverageTaste(display);
+
+        return display;
+    }
+
+    /**
+     * Bakes the weighted-average taste into the given stack as taste-mod keys.
+     * The probe reads the template through the IFood getters (base + cook/smoke
+     * profiles, since all taste keys were stripped from the template), so the
+     * vanilla getter chain afterwards displays exactly the stored weighted
+     * average — for both plain foods and meals. Uses the CURRENT aggregate
+     * totals; callers must invoke before mutating them.
+     */
+    private void bakeAverageTaste(ItemStack stack) {
+        if (template == null || totalWeight <= 0) return;
+
+        IFood food = (IFood) template.getItem();
+        int[] probe = { food.getTasteSweet(template), food.getTasteSour(template), food.getTasteSalty(template),
+            food.getTasteBitter(template), food.getTasteSavory(template) };
+        Food.setSweetMod(stack, Math.round(tasteSum[0] / totalWeight - probe[0]));
+        Food.setSourMod(stack, Math.round(tasteSum[1] / totalWeight - probe[1]));
+        Food.setSaltyMod(stack, Math.round(tasteSum[2] / totalWeight - probe[2]));
+        Food.setBitterMod(stack, Math.round(tasteSum[3] / totalWeight - probe[3]));
+        Food.setSavoryMod(stack, Math.round(tasteSum[4] / totalWeight - probe[4]));
     }
 
     /** Materializes the aggregate into a single virtual food stack. */
@@ -263,6 +400,7 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
         if (template == null || totalWeight <= 0) return;
 
         ItemStack[] arr = new ItemStack[] { materialize() };
+        float w0 = totalWeight;
         TFC_Core.handleItemTicking(arr, worldObj, xCoord, yCoord, zCoord, 1.0f, 1.0f, false);
         if (arr[0] == null || arr[0].stackSize <= 0) {
             clearRot();
@@ -271,6 +409,14 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
         totalWeight = Food.getWeight(arr[0]);
         totalDecay = Food.getDecay(arr[0]);
         decayTimer = Food.getDecayTimer(arr[0]);
+        // Keep the taste average invariant under decay: tasteSum is a weighted
+        // sum, so shrink it by the same ratio the weight shrank.
+        if (w0 > 0 && totalWeight > 0 && totalWeight != w0) {
+            float tasteRatio = totalWeight / w0;
+            for (int i = 0; i < tasteSum.length; i++) {
+                tasteSum[i] *= tasteRatio;
+            }
+        }
     }
 
     // ////////////////////////////////////////////////////////////
@@ -323,7 +469,10 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
             }
             return;
         }
-        if (slot == SLOT_AGGREGATE && stack != null && stack.stackSize > 0 && restoreValid && preExtractTemplate != null
+        if (slot == SLOT_AGGREGATE && stack != null
+            && stack.stackSize > 0
+            && restoreValid
+            && preExtractTemplate != null
             && keyMatches(preExtractTemplate, stack)
             && Math.abs(Food.getWeight(stack) - preExtractWeight) < 0.5f) {
             // Vanilla hopper write-back of the view it read: the portion it
@@ -449,12 +598,7 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
     private void spill(ItemStack stack) {
         if (worldObj == null || stack == null || stack.stackSize <= 0) return;
         if (worldObj.isRemote) return;
-        EntityItem entity = new EntityItem(
-            worldObj,
-            xCoord + 0.5D,
-            yCoord + 0.5D,
-            zCoord + 0.5D,
-            stack.copy());
+        EntityItem entity = new EntityItem(worldObj, xCoord + 0.5D, yCoord + 0.5D, zCoord + 0.5D, stack.copy());
         worldObj.spawnEntityInWorld(entity);
     }
 }

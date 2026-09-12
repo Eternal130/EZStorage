@@ -15,7 +15,11 @@ import net.minecraft.network.Packet;
 import net.minecraft.network.play.server.S35PacketUpdateTileEntity;
 import net.minecraft.tileentity.TileEntity;
 
+import com.dunk.tfc.api.Constant.Global;
+import com.dunk.tfc.api.Food;
+import com.dunk.tfc.api.Interfaces.IFood;
 import com.zerofall.ezstorage.block.BlockCraftingBox;
+import com.zerofall.ezstorage.block.BlockFoodStorage;
 import com.zerofall.ezstorage.block.BlockInventoryProxy;
 import com.zerofall.ezstorage.block.BlockStorage;
 import com.zerofall.ezstorage.block.BlockStorageAdapter;
@@ -24,6 +28,7 @@ import com.zerofall.ezstorage.block.StorageMultiblock;
 import com.zerofall.ezstorage.configuration.EZConfiguration;
 import com.zerofall.ezstorage.init.EZBlocks;
 import com.zerofall.ezstorage.storage.ExternalStorageProvider;
+import com.zerofall.ezstorage.storage.FoodStorageProvider;
 import com.zerofall.ezstorage.storage.IStorageProvider;
 import com.zerofall.ezstorage.storage.InternalStorageProvider;
 import com.zerofall.ezstorage.util.BlockRef;
@@ -212,6 +217,13 @@ public class TileEntityStorageCore extends TileEntity {
                         teInvProxy.setCore(this);
                     }
                 }
+                if (blockRef.block instanceof BlockFoodStorage) {
+                    TileEntity te = worldObj.getTileEntity(blockRef.posX, blockRef.posY, blockRef.posZ);
+                    if (te instanceof TileEntityFoodStorage foodTe) {
+                        foodTe.setCore(this);
+                        addExternalProvider(new FoodStorageProvider(foodTe));
+                    }
+                }
                 if (blockRef.block instanceof BlockCraftingBox) {
                     hasCraftBox = true;
                 }
@@ -300,7 +312,7 @@ public class TileEntityStorageCore extends TileEntity {
                 if (item == null) continue;
                 boolean merged = false;
                 for (ItemStack existing : result) {
-                    if (EZInventory.stacksEqual(existing, item)) {
+                    if (unifiedStacksMergeable(existing, item)) {
                         existing.stackSize += item.stackSize;
                         merged = true;
                         break;
@@ -315,6 +327,20 @@ public class TileEntityStorageCore extends TileEntity {
         cachedUnifiedList = result;
         unifiedListDirty = false;
         return new ArrayList<>(cachedUnifiedList);
+    }
+
+    /**
+     * Display-stack merge equality. Food aggregate display stacks bake volatile
+     * values (decay, taste average) into NBT, so full-NBT equality never holds
+     * between two boxes holding the same food — merge those by the food
+     * identity key instead. The merged row keeps the first box's baked
+     * decay/taste lines (cosmetic approximation); total weight is exact.
+     */
+    private static boolean unifiedStacksMergeable(ItemStack a, ItemStack b) {
+        if (TileEntityFoodStorage.isFoodAggregate(a) && TileEntityFoodStorage.isFoodAggregate(b)) {
+            return TileEntityFoodStorage.keyMatches(a, b);
+        }
+        return EZInventory.stacksEqual(a, b);
     }
 
     public long getUnifiedTotalCount() {
@@ -352,6 +378,20 @@ public class TileEntityStorageCore extends TileEntity {
     public ItemStack unifiedInput(ItemStack stack) {
         if (stack == null) return null;
         ItemStack remainder = stack;
+
+        // Food-designated routing (design 2.2): storable TFC food goes to food
+        // storage boxes first — real food never matches a display stack under
+        // stacksEqual, so the generic passes below would hand it to whatever
+        // external provider accepts it. Whatever the boxes reject (no box in
+        // the system, wrong kind, cap reached) falls through to normal input.
+        if (TileEntityFoodStorage.isStorableFood(remainder)) {
+            for (IStorageProvider provider : providers) {
+                if (!provider.isValid() || remainder == null) continue;
+                if (provider instanceof FoodStorageProvider) {
+                    remainder = provider.input(remainder);
+                }
+            }
+        }
 
         // Pass 1: providers that already have matching items
         for (IStorageProvider provider : providers) {
@@ -394,6 +434,16 @@ public class TileEntityStorageCore extends TileEntity {
         if (unifiedIndex >= unified.size()) return null;
 
         ItemStack target = unified.get(unifiedIndex);
+
+        // Food aggregates: item-count semantics (stack max 1, half of 1 = 0)
+        // cannot express weight portions. Route to weight-based extraction:
+        // left/full/single = 160oz, right = 80oz, both capped by the per-item
+        // max portion and the stored amount. Returns one legal real stack.
+        if (TileEntityFoodStorage.isFoodAggregate(target)) {
+            float oz = type == 1 ? Global.FOOD_MAX_WEIGHT * 0.5f : Global.FOOD_MAX_WEIGHT;
+            return unifiedExtractOz(unifiedIndex, oz);
+        }
+
         int maxStackSize = target.getMaxStackSize();
         int totalAvailable = target.stackSize;
 
@@ -431,6 +481,14 @@ public class TileEntityStorageCore extends TileEntity {
             target = unified.get(unifiedIndex);
         }
 
+        // Food aggregates: the generic path below would seed the result from
+        // the DISPLAY stack (marker NBT, no weight) — an illegal item. Route
+        // to weight-based extraction (oz per item count, matching
+        // FoodStorageProvider.extractExact semantics).
+        if (TileEntityFoodStorage.isFoodAggregate(target)) {
+            return unifiedExtractOz(unifiedIndex, EZConfiguration.hopperExtractOz * (long) amount);
+        }
+
         int toExtract = Math.min(amount, target.stackSize);
         if (toExtract <= 0) return null;
 
@@ -460,11 +518,67 @@ public class TileEntityStorageCore extends TileEntity {
     private int findItemIndex(IStorageProvider provider, ItemStack target) {
         List<ItemStack> items = provider.getAllItems();
         for (int i = 0; i < items.size(); i++) {
-            if (items.get(i) != null && EZInventory.stacksEqual(items.get(i), target)) {
+            ItemStack item = items.get(i);
+            if (item == null) continue;
+            // Food aggregate display stacks bake volatile values (decay, taste
+            // average) into NBT, so full-NBT equality against a possibly stale
+            // unified-list entry fails. Match aggregates by the identity key,
+            // which ignores exactly those volatile keys.
+            if (TileEntityFoodStorage.isFoodAggregate(target) && TileEntityFoodStorage.isFoodAggregate(item)) {
+                if (TileEntityFoodStorage.keyMatches(item, target)) return i;
+            } else if (EZInventory.stacksEqual(item, target)) {
                 return i;
             }
         }
         return -1;
+    }
+
+    /**
+     * Weight-based extraction for food aggregates. Pulls the requested ounces
+     * from every food box whose display stack matches the unified entry,
+     * merging the parts into ONE legal stack (total decay stays below total
+     * weight because parts are merged weight-first).
+     */
+    public ItemStack unifiedExtractOz(int unifiedIndex, float requestedOz) {
+        if (unifiedIndex < 0 || requestedOz <= 0) return null;
+
+        List<ItemStack> unified = getUnifiedItemList();
+        if (unifiedIndex >= unified.size()) return null;
+
+        ItemStack target = unified.get(unifiedIndex);
+        if (!TileEntityFoodStorage.isFoodAggregate(target)) return null;
+        if (!(target.getItem() instanceof IFood)) return null;
+
+        float maxPortion = ((IFood) target.getItem()).getFoodMaxWeight(target);
+        float remaining = Math.min(requestedOz, maxPortion);
+
+        ItemStack result = null;
+        for (IStorageProvider provider : providers) {
+            if (!provider.isValid() || remaining <= 0.001f) continue;
+            if (!(provider instanceof FoodStorageProvider)) continue;
+
+            int localIndex = findItemIndex(provider, target);
+            if (localIndex < 0) continue;
+
+            ItemStack part = ((FoodStorageProvider) provider).extractPortion(remaining);
+            if (part == null || part.stackSize <= 0) continue;
+
+            if (result == null) {
+                result = part;
+            } else {
+                // setWeight BEFORE setDecay: setWeight destroys the stack when
+                // decay > weight, and the running sums keep decay < weight.
+                Food.setWeight(result, Food.getWeight(result) + Food.getWeight(part));
+                Food.setDecay(result, Food.getDecay(result) + Food.getDecay(part));
+            }
+            remaining -= Food.getWeight(part);
+        }
+
+        if (result != null) {
+            markUnifiedListDirty();
+            return result;
+        }
+        return null;
     }
 
     public boolean isPartOfMultiblock(BlockRef blockRef) {
