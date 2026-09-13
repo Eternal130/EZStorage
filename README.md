@@ -1,10 +1,10 @@
-# Simple Storage
+# Unified Storage
 
 Simple storage mod for Minecraft 1.7.10 (Forge).
 
 ## Description
 
-Simple Storage (former EZStorage) introduces an early-game storage system that scales and evolves as players progress, while keeping the vanilla flair. Want to put 100k Cobblestone in 1 slot? No problem. The blocks in the mod can add a crafting grid, additional storage, and more. Also includes integration into some mods for easier crafting or additional features!
+Unified Storage (former Simple storage) introduces an early-game storage system that scales and evolves as players progress, while keeping the vanilla flair. Want to put 100k Cobblestone in 1 slot? No problem. The blocks in the mod can add a crafting grid, additional storage, and more. Also includes integration into some mods for easier crafting or additional features!
 
 > **This fork** adds external storage compatibility (via the Storage Adapter block), TFC+ (TerraFirmaCraft Plus) integration (crafting system, item restrictions, tier-appropriate recipes, and a dedicated food storage system), and significant performance optimizations to adapt to the development flow and storage needs of TFC+.
 
@@ -86,7 +86,7 @@ This fork adds TFC+ (TerraFirmaCraft Plus) integration, external storage support
 ### TFC+ Adaptations
 
 - TFC+ crafting system integration in the storage crafting grid
-- TFC+ item restrictions applied to internal storage (e.g. food decay, tool damage)
+- TFC+ item restrictions applied to internal storage (e.g. tool damage)
 - Recipes aligned with TFC+ progression (e.g. portable panel tier 3 uses black steel ingot instead of ender eye)
 - Ore dictionary matching for upgrade recipes to use TFC+ materials
 

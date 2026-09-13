@@ -8,7 +8,7 @@ tile.storage_panel.name=Storage Panel
 tile.storage_cable.name=Storage Cable
 tile.storage_adapter.name=Storage Adapter
 item.portable_storage_terminal.name=Portable Storage Panel
-itemGroup.Simple Storage=Simple Storage
+itemGroup.Unified Storage=Unified Storage
 hud.msg.unifiedstorage.general.holdshift=§o<Hold Shift>
 hud.msg.unifiedstorage.general.holdctrl=§o<Hold Ctrl>
 hud.msg.unifiedstorage.core.itemscount=%s / %s items
@@ -29,7 +29,7 @@ chat.msg.storagecore_connected=Connected to Storage Core at x=%s y=%s z=%s
 chat.msg.storagecore_not_found=Storage core cannot be found
 chat.msg.storagecore_out_of_range=Storage core is out of range
 chat.msg.unifiedstorage.inventory_full=Inventory is full. Please free up some space first.
-key.categories.unifiedstorage=Simple Storage
+key.categories.unifiedstorage=Unified Storage
 key.unifiedstorage.open_terminal=Open Storage Panel
 key.unifiedstorage.bulk_action=Move All Items
 key.unifiedstorage.drop_item=Drop Item
