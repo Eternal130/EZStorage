@@ -6,7 +6,7 @@ Simple storage mod for Minecraft 1.7.10 (Forge).
 
 Simple Storage (former EZStorage) introduces an early-game storage system that scales and evolves as players progress, while keeping the vanilla flair. Want to put 100k Cobblestone in 1 slot? No problem. The blocks in the mod can add a crafting grid, additional storage, and more. Also includes integration into some mods for easier crafting or additional features!
 
-> **This fork** adds external storage compatibility (via the Storage Adapter block), TFC+ (TerraFirmaCraft Plus) integration (crafting system, item restrictions, tier-appropriate recipes), and significant performance optimizations to adapt to the development flow and storage needs of TFC+.
+> **This fork** adds external storage compatibility (via the Storage Adapter block), TFC+ (TerraFirmaCraft Plus) integration (crafting system, item restrictions, tier-appropriate recipes, and a dedicated food storage system), and significant performance optimizations to adapt to the development flow and storage needs of TFC+.
 
 ## Blocks & Items
 
@@ -31,6 +31,19 @@ Simple Storage (former EZStorage) introduces an early-game storage system that s
   - Supports double chests and sided inventories
   - External inventories **must be in loaded chunks** to function — if the target area is unloaded, external items will not be accessible
   - Must be enabled via `experimentalContent` config option
+- **Food Storage Box** *(TFC+)*
+  - Bulk storage for a single kind of TFC+ food, measured by weight (oz) instead of item count
+  - No GUI by design — items move in and out via hoppers or the Storage Core terminal
+  - Foods stack together when their identity matches: same item, processing tags (brined/pickled/salted/cooked/dried), cook stage bucket, meal ingredients, infusion and yeast — taste never blocks stacking
+  - Stored food keeps decaying based on environment temperature (identical math to a TFC chest, including offline catch-up); fully rotted contents are cleared automatically
+  - Terminal integration: the entry shows total oz (badge) and TFC-style weight/decay bars; left click extracts 160 oz, right click 80 oz, the bulk key a full portion; less than the target extracts the remainder
+  - Taste of extracted food is rewritten to the stored weighted average; the tooltip tiers it by the observer's cooking skill, exactly like regular TFC food
+  - Per-food extraction caps (sandwiches 10 oz, salads 20 oz, soups 24 oz, meals 20 oz, plain food 160 oz), overridable per item via config
+  - Optional storage cap (oz, config; unlimited by default): over-cap inserts are knife-split when any knife is stored in the system — the fitting part is absorbed and the rest returned; minimum split is 1 oz, and non-splittable foods (sandwiches, salads, plus a configurable blacklist) are rejected whole
+  - Container foods (salads): the container is stripped into system storage on insert and consumed back from it on extract; extraction is blocked with a "requires: ..." hint while the container is unavailable
+  - Hot food cools to ambient on insert; smoke progress resets (completed smokes are unaffected)
+  - The stored food is rendered flat on the box's faces; Waila/WDMla shows contents, weight and decay
+  - Cannot be broken while non-empty (same protection as the Storage Core)
 - **Portable Storage Panel**
   - A wireless terminal that provides remote access to your Storage Core from anywhere
   - Tier can be upgraded for increased range, with an infinity tier offering unlimited range
@@ -47,6 +60,7 @@ Simple Storage (former EZStorage) introduces an early-game storage system that s
 - **Waila**
   - Advanced tooltip overlay
   - Show storage content (items/types count) in world tooltip
+  - Food Storage Box: contents, total weight and decay (works with WDMla's old-API compat layer)
 - **JABBA**
   - Move the storage core from one place to another place using the dolly from Jabba
 - **Crafting Tweaks**
@@ -83,6 +97,13 @@ This fork adds TFC+ (TerraFirmaCraft Plus) integration, external storage support
 - Unified I/O: items can be inserted into and extracted from external inventories via the Storage Core GUI
 - Double chest support with proper item validation
 - Chunk loading requirement: external inventories must be in loaded chunks
+
+### Food Storage
+
+- Food Storage Box: single-kind bulk food storage aggregated by weight, with TFC-faithful decay simulation (environment temperature, offline catch-up, rot protection) and weight-averaged taste
+- Native storage provider integration: the box appears in the terminal with total-oz badge, TFC weight/decay bars, skill-tiered taste tooltip, and weight-based extraction semantics (160/80 oz, remainder fallback)
+- Knife cap-splitting (system-wide knife detection), container flow through system storage (strip on insert, consume on extract, named missing-container hints), per-food extraction caps and a no-split blacklist (configurable)
+- Waila/WDMla provider, TESR food icon on the block faces, non-empty break protection
 
 ### Performance Optimizations
 

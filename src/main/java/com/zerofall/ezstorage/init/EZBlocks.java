@@ -83,6 +83,8 @@ public class EZBlocks {
 
         GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(storage_core), "ABA", "BCB", "ABA", 'A', "logWood", 'B', "stickWood", 'C', "chestWood"));
         GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(storage_box), "ABA", "CDC", "ABA", 'A', "logWood", 'B', "plateCopper", 'C', "plankWood", 'D', "chestWood"));
+        // Food storage box: storage box pattern with a TFC barrel of any wood in the center
+        GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(food_storage), "ABA", "CDC", "ABA", 'A', "logWood", 'B', "plateCopper", 'C', "plankWood", 'D', "barrelWood"));
         GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(condensed_storage_box), "ACA", "EBE", "DCD", 'A', t2_1, 'B', storage_box, 'C', "ingotGold", 'D', t2_2, 'E', "chestWood"));
         GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(hyper_storage_box), "ABA", "ACA", "ABA", 'A', "plateSteel", 'B', "gemDiamond", 'C', condensed_storage_box));
         GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(inventory_proxy), " A ", " B ", " C ", 'A', TFCBlocks.hopper, 'B', Blocks.piston, 'C', "plateWroughtIron"));
