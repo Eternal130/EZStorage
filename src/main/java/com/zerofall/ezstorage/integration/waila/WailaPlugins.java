@@ -50,11 +50,13 @@ public class WailaPlugins extends PluginBase {
             }
             if (EZStorageUtils.isShiftDown()) {
                 tooltip.add(
-                    StatCollector.translateToLocalFormatted("hud.msg.unifiedstorage.core.inventoryid", core.inventoryId));
+                    StatCollector
+                        .translateToLocalFormatted("hud.msg.unifiedstorage.core.inventoryid", core.inventoryId));
             }
         } else if (accessor.getBlock() instanceof BlockStorage block) {
             tooltip.add(
-                StatCollector.translateToLocalFormatted("hud.msg.unifiedstorage.storage.capacity", block.getCapacity()));
+                StatCollector
+                    .translateToLocalFormatted("hud.msg.unifiedstorage.storage.capacity", block.getCapacity()));
         }
     }
 }

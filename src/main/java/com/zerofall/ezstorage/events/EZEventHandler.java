@@ -49,10 +49,16 @@ public class EZEventHandler {
             "key.categories.unifiedstorage");
         ClientRegistry.registerKeyBinding(keybindOpenTerminal);
 
-        keybindBulkAction = new KeyBinding("key.unifiedstorage.bulk_action", Keyboard.KEY_SPACE, "key.categories.unifiedstorage");
+        keybindBulkAction = new KeyBinding(
+            "key.unifiedstorage.bulk_action",
+            Keyboard.KEY_SPACE,
+            "key.categories.unifiedstorage");
         ClientRegistry.registerKeyBinding(keybindBulkAction);
 
-        keybindPickBlock = new KeyBinding("key.unifiedstorage.pick_block", Keyboard.CHAR_NONE, "key.categories.unifiedstorage");
+        keybindPickBlock = new KeyBinding(
+            "key.unifiedstorage.pick_block",
+            Keyboard.CHAR_NONE,
+            "key.categories.unifiedstorage");
         ClientRegistry.registerKeyBinding(keybindPickBlock);
     }
 
