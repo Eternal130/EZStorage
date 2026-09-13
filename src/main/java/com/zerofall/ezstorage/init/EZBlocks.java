@@ -18,7 +18,6 @@ import com.zerofall.ezstorage.block.BlockStorageAdapter;
 import com.zerofall.ezstorage.block.BlockStorageCable;
 import com.zerofall.ezstorage.block.BlockStorageCore;
 import com.zerofall.ezstorage.block.BlockStoragePanel;
-import com.zerofall.ezstorage.configuration.EZConfiguration;
 import com.zerofall.ezstorage.item.ItemBlockStorage;
 import com.zerofall.ezstorage.tileentity.TileEntityFoodStorage;
 import com.zerofall.ezstorage.tileentity.TileEntityInventoryProxy;
@@ -66,14 +65,10 @@ public class EZBlocks {
         GameRegistry.registerBlock(crafting_box, crafting_box.getUnlocalizedName().substring(5));
         GameRegistry.registerBlock(food_storage, food_storage.getUnlocalizedName().substring(5));
         GameRegistry.registerTileEntity(TileEntityFoodStorage.class, "TileEntityFoodStorage");
-        if (EZConfiguration.experimentalContent) {
-            // This blocks add new options to the game not intended to be included into this mod.
-            // Maybe will move them to another mod, an add-on.
-            GameRegistry.registerBlock(storage_panel, storage_panel.getUnlocalizedName().substring(5));
-            GameRegistry.registerBlock(storage_cable, storage_cable.getUnlocalizedName().substring(5));
-            GameRegistry.registerBlock(storage_adapter, storage_adapter.getUnlocalizedName().substring(5));
-            GameRegistry.registerTileEntity(TileEntityStorageAdapter.class, "TileEntityStorageAdapter");
-        }
+        GameRegistry.registerBlock(storage_panel, storage_panel.getUnlocalizedName().substring(5));
+        GameRegistry.registerBlock(storage_cable, storage_cable.getUnlocalizedName().substring(5));
+        GameRegistry.registerBlock(storage_adapter, storage_adapter.getUnlocalizedName().substring(5));
+        GameRegistry.registerTileEntity(TileEntityStorageAdapter.class, "TileEntityStorageAdapter");
     }
 
     public static void registerRecipes() {
@@ -90,11 +85,8 @@ public class EZBlocks {
         GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(inventory_proxy), " A ", " B ", " C ", 'A', TFCBlocks.hopper, 'B', Blocks.piston, 'C', "plateWroughtIron"));
         GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(crafting_box), " A ", " B ", " C ", 'A', Items.ender_pearl, 'B', "craftingTableWood", 'C', "gemDiamond"));
         GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(storage_panel), "ABA", "BCB", "ABA", 'A', "logWood", 'B', "stickWood", 'C', "plankWood"));
-        
-        if (EZConfiguration.experimentalContent) {
-            GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(storage_cable, 16), "ABA", "BBB", "ABA", 'A', "logWood", 'B', "stickWood"));
-            GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(storage_adapter), " A ", "BCB", " A ", 'A', "plateCopper", 'B', "chestWood", 'C', "gemChipped"));
-        }
+        GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(storage_cable, 16), "ABA", "BBB", "ABA", 'A', "logWood", 'B', "stickWood"));
+        GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(storage_adapter), " A ", "BCB", " A ", 'A', "plateCopper", 'B', "chestWood", 'C', "gemChipped"));
 
         if (!OreDictionary.getOres("blockDarkSteel").isEmpty()) {
             GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(hyper_storage_box), "ABA", "BCB", "ABA", 'A', "blockDarkSteel", 'B', "plateSteel", 'C', condensed_storage_box));

@@ -39,10 +39,6 @@ public class EZConfiguration {
     @Config.DefaultBoolean(true)
     public static boolean focusGuiInput;
 
-    @Config.Comment("Enables experimental content that might not be stable enough or has known quirks.")
-    @Config.DefaultBoolean(false)
-    public static boolean experimentalContent;
-
     @Config.Comment("Last used sort mode for the storage GUI. Values: AMOUNT, NAME, MOD")
     @Config.DefaultString("AMOUNT")
     public static String guiSortMode;

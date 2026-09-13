@@ -25,12 +25,11 @@ Simple Storage (former EZStorage) introduces an early-game storage system that s
   - Expose the storage inventory to hoppers, conduits, machines and AE2 storage bus
 - **Crafting Box**
   - This adds a crafting grid to the GUI of your Storage Core (compatible with NEI + clicking for easy crafting from the internal inventory)
-- **Storage Adapter** *(Experimental)*
+- **Storage Adapter**
   - Connects adjacent external inventories (chests, machines, etc.) to the storage system
   - Items in connected inventories become visible and accessible from the Storage Core GUI, alongside internal storage
   - Supports double chests and sided inventories
   - External inventories **must be in loaded chunks** to function — if the target area is unloaded, external items will not be accessible
-  - Must be enabled via `experimentalContent` config option
 - **Food Storage Box** *(TFC+)*
   - Bulk storage for a single kind of TFC+ food, measured by weight (oz) instead of item count
   - No GUI by design — items move in and out via hoppers or the Storage Core terminal
