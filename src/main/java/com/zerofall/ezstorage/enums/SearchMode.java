@@ -2,10 +2,10 @@ package com.zerofall.ezstorage.enums;
 
 public enum SearchMode {
 
-    AUTO(0, "hud.msg.ezstorage.search.mode.auto"),
-    NEI_SYNC(1, "hud.msg.ezstorage.search.mode.nei_sync"),
-    NEI_STANDARD(2, "hud.msg.ezstorage.search.mode.nei_standard"),
-    STANDARD(3, "hud.msg.ezstorage.search.mode.standard");
+    AUTO(0, "hud.msg.unifiedstorage.search.mode.auto"),
+    NEI_SYNC(1, "hud.msg.unifiedstorage.search.mode.nei_sync"),
+    NEI_STANDARD(2, "hud.msg.unifiedstorage.search.mode.nei_standard"),
+    STANDARD(3, "hud.msg.unifiedstorage.search.mode.standard");
 
     public final int index;
     public final String langKey;

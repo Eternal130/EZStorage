@@ -2,9 +2,9 @@ package com.zerofall.ezstorage.enums;
 
 public enum SortMode {
 
-    AMOUNT(0, "hud.msg.ezstorage.sort.mode.amount"),
-    NAME(1, "hud.msg.ezstorage.sort.mode.name"),
-    MOD(2, "hud.msg.ezstorage.sort.mode.mod");
+    AMOUNT(0, "hud.msg.unifiedstorage.sort.mode.amount"),
+    NAME(1, "hud.msg.unifiedstorage.sort.mode.name"),
+    MOD(2, "hud.msg.unifiedstorage.sort.mode.mod");
 
     public final int index;
     public final String langKey;

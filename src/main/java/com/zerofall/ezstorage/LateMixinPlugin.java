@@ -12,7 +12,7 @@ public class LateMixinPlugin implements ILateMixinLoader {
 
     @Override
     public String getMixinConfig() {
-        return "mixins.ezstorage.late.json";
+        return "mixins.unifiedstorage.late.json";
     }
 
     @Override

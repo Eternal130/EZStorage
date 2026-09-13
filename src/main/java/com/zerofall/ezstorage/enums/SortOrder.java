@@ -2,8 +2,8 @@ package com.zerofall.ezstorage.enums;
 
 public enum SortOrder {
 
-    DESCENDING(0, "hud.msg.ezstorage.sort.order.descending"),
-    ASCENDING(1, "hud.msg.ezstorage.sort.order.ascending");
+    DESCENDING(0, "hud.msg.unifiedstorage.sort.order.descending"),
+    ASCENDING(1, "hud.msg.unifiedstorage.sort.order.ascending");
 
     public final int index;
     public final String langKey;

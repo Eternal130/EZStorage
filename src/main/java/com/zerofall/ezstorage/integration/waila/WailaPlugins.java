@@ -37,24 +37,24 @@ public class WailaPlugins extends PluginBase {
             int typesMax = core.inventoryTypesMax;
             tooltip.add(
                 StatCollector.translateToLocalFormatted(
-                    "hud.msg.ezstorage.core.itemscount",
+                    "hud.msg.unifiedstorage.core.itemscount",
                     formatter.format(itemsTotal),
                     formatter.format(itemsMax)));
             if (typesMax != 0 && typesMax < itemsMax) {
                 int typesTotal = core.inventoryTypesStored;
                 tooltip.add(
                     StatCollector.translateToLocalFormatted(
-                        "hud.msg.ezstorage.core.typescount",
+                        "hud.msg.unifiedstorage.core.typescount",
                         formatter.format(typesTotal),
                         formatter.format(typesMax)));
             }
             if (EZStorageUtils.isShiftDown()) {
                 tooltip.add(
-                    StatCollector.translateToLocalFormatted("hud.msg.ezstorage.core.inventoryid", core.inventoryId));
+                    StatCollector.translateToLocalFormatted("hud.msg.unifiedstorage.core.inventoryid", core.inventoryId));
             }
         } else if (accessor.getBlock() instanceof BlockStorage block) {
             tooltip.add(
-                StatCollector.translateToLocalFormatted("hud.msg.ezstorage.storage.capacity", block.getCapacity()));
+                StatCollector.translateToLocalFormatted("hud.msg.unifiedstorage.storage.capacity", block.getCapacity()));
         }
     }
 }

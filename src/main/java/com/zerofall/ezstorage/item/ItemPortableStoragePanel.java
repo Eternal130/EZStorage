@@ -158,11 +158,11 @@ public class ItemPortableStoragePanel extends EZItem implements IBauble, IBauble
 
             String strConnected;
             if (connected) {
-                strConnected = "§2" + StatCollector.translateToLocal("hud.msg.ezstorage.portable.status.connected") + "§r";
+                strConnected = "§2" + StatCollector.translateToLocal("hud.msg.unifiedstorage.portable.status.connected") + "§r";
             } else {
-                strConnected = "§4" + StatCollector.translateToLocal("hud.msg.ezstorage.portable.status.notconnected") + "§r";
+                strConnected = "§4" + StatCollector.translateToLocal("hud.msg.unifiedstorage.portable.status.notconnected") + "§r";
             }
-            tooltip.add(StatCollector.translateToLocalFormatted("hud.msg.ezstorage.portable.status", strConnected));
+            tooltip.add(StatCollector.translateToLocalFormatted("hud.msg.unifiedstorage.portable.status", strConnected));
 
             if (reference != null && connected && shiftPressed) {
                 tooltip.add("  ID: " + reference.inventoryId);
@@ -179,31 +179,31 @@ public class ItemPortableStoragePanel extends EZItem implements IBauble, IBauble
                 } else {
                     strRange = "§f" + tier.range;
                 }
-                tooltip.add(StatCollector.translateToLocalFormatted("hud.msg.ezstorage.portable.range", strRange) + "§r");
+                tooltip.add(StatCollector.translateToLocalFormatted("hud.msg.unifiedstorage.portable.range", strRange) + "§r");
             }
 
             String strCrafting;
             if (hasCrafting) {
-                strCrafting = "§2" + StatCollector.translateToLocal("hud.msg.ezstorage.portable.crafting.enabled") + "§r";
+                strCrafting = "§2" + StatCollector.translateToLocal("hud.msg.unifiedstorage.portable.crafting.enabled") + "§r";
             } else {
-                strCrafting = "§4" + StatCollector.translateToLocal("hud.msg.ezstorage.portable.crafting.disabled") + "§r";
+                strCrafting = "§4" + StatCollector.translateToLocal("hud.msg.unifiedstorage.portable.crafting.disabled") + "§r";
             }
-            tooltip.add(StatCollector.translateToLocalFormatted("hud.msg.ezstorage.portable.crafting", strCrafting));
+            tooltip.add(StatCollector.translateToLocalFormatted("hud.msg.unifiedstorage.portable.crafting", strCrafting));
 
             if (ctrlPressed && tier != null && (!tier.isInfinity || !hasCrafting)) {
-                tooltip.add(StatCollector.translateToLocal("hud.msg.ezstorage.portable.upgrades"));
+                tooltip.add(StatCollector.translateToLocal("hud.msg.unifiedstorage.portable.upgrades"));
                 final PortableStoragePanelTier nextTier = PortableStoragePanelTier.getNextTier(tier);
                 if (nextTier != null) {
                     ItemStack upgradeItem = PortableStoragePanelUpgradeRecipe.getUpgradeItemStack(nextTier);
                     String upgradeName = upgradeItem != null ? upgradeItem.getItem()
                         .getItemStackDisplayName(upgradeItem) : "???";
-                    tooltip.add("  - " + StatCollector.translateToLocalFormatted("hud.msg.ezstorage.portable.upgrade.nexttier",
+                    tooltip.add("  - " + StatCollector.translateToLocalFormatted("hud.msg.unifiedstorage.portable.upgrade.nexttier",
                         panel.getItemStackDisplayName(null),
                         Blocks.redstone_block.getLocalizedName(),
                         upgradeName));
                 }
                 if (!hasCrafting) {
-                    tooltip.add("  - " + StatCollector.translateToLocalFormatted("hud.msg.ezstorage.portable.upgrade.crafting",
+                    tooltip.add("  - " + StatCollector.translateToLocalFormatted("hud.msg.unifiedstorage.portable.upgrade.crafting",
                         panel.getItemStackDisplayName(null),
                         Blocks.redstone_block.getLocalizedName(),
                         EZBlocks.crafting_box.getLocalizedName()));
@@ -211,11 +211,11 @@ public class ItemPortableStoragePanel extends EZItem implements IBauble, IBauble
             }
 
             if (!shiftPressed && connected) {
-                tooltip.add(StatCollector.translateToLocal("hud.msg.ezstorage.general.holdshift"));
+                tooltip.add(StatCollector.translateToLocal("hud.msg.unifiedstorage.general.holdshift"));
             }
 
             if (!ctrlPressed && tier != null && (!tier.isInfinity || !hasCrafting)) {
-                tooltip.add(StatCollector.translateToLocal("hud.msg.ezstorage.general.holdctrl"));
+                tooltip.add(StatCollector.translateToLocal("hud.msg.unifiedstorage.general.holdctrl"));
             }
         }
     }

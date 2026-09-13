@@ -251,7 +251,7 @@ public class GuiStorageCore extends GuiContainer {
                 return StatCollector.translateToLocal(currentSearchMode.langKey);
             case BTN_SAVE_SEARCH:
                 return StatCollector.translateToLocal(
-                    saveSearch ? "hud.msg.ezstorage.savesearch.on" : "hud.msg.ezstorage.savesearch.off");
+                    saveSearch ? "hud.msg.unifiedstorage.savesearch.on" : "hud.msg.unifiedstorage.savesearch.off");
             default:
                 return "";
         }
@@ -327,7 +327,7 @@ public class GuiStorageCore extends GuiContainer {
         if (totalOz <= 0) totalOz = over.stackSize;
         tip.add(
             StatCollector.translateToLocalFormatted(
-                "hud.msg.ezstorage.food.totalweight",
+                "hud.msg.unifiedstorage.food.totalweight",
                 String.format("%.1f", totalOz),
                 String.format("%.1f", com.dunk.tfc.api.Constant.Global.FOOD_MAX_WEIGHT)));
         if (tag.hasKey(TileEntityFoodStorage.NBT_DECAY)) {
@@ -336,7 +336,7 @@ public class GuiStorageCore extends GuiContainer {
                 String pct = String.format("%.1f", decayOz * 100.0f / Math.max(totalOz, 0.01f));
                 tip.add(
                     StatCollector
-                        .translateToLocalFormatted("hud.msg.ezstorage.food.decay", String.valueOf(decayOz), pct));
+                        .translateToLocalFormatted("hud.msg.unifiedstorage.food.decay", String.valueOf(decayOz), pct));
             }
         }
         ItemFoodTFC.addTasteInformation(over, this.mc.thePlayer, tip);
@@ -403,7 +403,7 @@ public class GuiStorageCore extends GuiContainer {
         handleScrolling(mouseX, mouseY);
         String totalCount = FORMATTER.format(getInventory().getTotalCount());
         String max = FORMATTER.format(getInventory().maxItems);
-        String amount = StatCollector.translateToLocalFormatted("hud.msg.ezstorage.amount_count", totalCount, max);
+        String amount = StatCollector.translateToLocalFormatted("hud.msg.unifiedstorage.amount_count", totalCount, max);
         int stringWidth = fontRendererObj.getStringWidth(amount);
 
         if (stringWidth > 88) {
@@ -559,7 +559,7 @@ public class GuiStorageCore extends GuiContainer {
                         // explained immediately with zero ghost flicker.
                         GTNHLib.proxy.printMessageAboveHotbar(
                             StatCollector.translateToLocalFormatted(
-                                "chat.msg.ezstorage.food.need_container",
+                                "chat.msg.unifiedstorage.food.need_container",
                                 needed.getDisplayName()),
                             60,
                             true,

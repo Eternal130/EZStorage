@@ -168,7 +168,7 @@ public class HandlerMsgPickBlockFromTerminal implements IMessageHandler<MsgPickB
 
                     GTNHLib.proxy.sendMessageAboveHotbar(
                         player,
-                        new ChatComponentTranslation("chat.msg.ezstorage.inventory_full"),
+                        new ChatComponentTranslation("chat.msg.unifiedstorage.inventory_full"),
                         60,
                         true,
                         true);

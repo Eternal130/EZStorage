@@ -17,7 +17,7 @@ public abstract class Mixin_Jabba_ItemBarrelMover {
         method = "isTEMovable",
         at = @At("TAIL"), // Use TAIL instead of RETURN to only modify the last return and not each return.
         remap = false)
-    private boolean ezstorage$isTEMovable$allowStorageBox(boolean original, TileEntity container) {
+    private boolean unifiedstorage$isTEMovable$allowStorageBox(boolean original, TileEntity container) {
         return original || container instanceof TileEntityStorageCore;
     }
 }

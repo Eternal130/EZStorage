@@ -49,24 +49,24 @@ public class FoodStorageWailaProvider implements IWailaDataProvider {
         NBTTagCompound food = accessor.getNBTData()
             .getCompoundTag("ezFood");
         if (!food.getBoolean("HasFood")) {
-            currenttip.add(StatCollector.translateToLocal("hud.msg.ezstorage.food.waila.empty"));
+            currenttip.add(StatCollector.translateToLocal("hud.msg.unifiedstorage.food.waila.empty"));
             return currenttip;
         }
         String name = food.getString("Name");
         float weight = food.getFloat("Weight");
         float decay = food.getFloat("Decay");
         float capOz = food.getFloat("CapOz");
-        currenttip.add(StatCollector.translateToLocalFormatted("hud.msg.ezstorage.food.waila.content", name));
+        currenttip.add(StatCollector.translateToLocalFormatted("hud.msg.unifiedstorage.food.waila.content", name));
         currenttip.add(
             StatCollector.translateToLocalFormatted(
-                "hud.msg.ezstorage.food.totalweight",
+                "hud.msg.unifiedstorage.food.totalweight",
                 String.format("%.1f", weight),
                 String.format("%.1f", capOz)));
         if (decay > 0) {
             String pct = String.format("%.1f", decay * 100.0f / Math.max(weight, 0.01f));
             currenttip.add(
                 StatCollector
-                    .translateToLocalFormatted("hud.msg.ezstorage.food.decay", String.format("%.0f", decay), pct));
+                    .translateToLocalFormatted("hud.msg.unifiedstorage.food.decay", String.format("%.0f", decay), pct));
         }
         return currenttip;
     }

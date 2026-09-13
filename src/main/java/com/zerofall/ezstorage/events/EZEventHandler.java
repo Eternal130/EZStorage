@@ -44,15 +44,15 @@ public class EZEventHandler {
     @SideOnly(Side.CLIENT)
     public void initKeybinds() {
         keybindOpenTerminal = new KeyBinding(
-            "key.ezstorage.open_terminal",
+            "key.unifiedstorage.open_terminal",
             Keyboard.CHAR_NONE,
-            "key.categories.ezstorage");
+            "key.categories.unifiedstorage");
         ClientRegistry.registerKeyBinding(keybindOpenTerminal);
 
-        keybindBulkAction = new KeyBinding("key.ezstorage.bulk_action", Keyboard.KEY_SPACE, "key.categories.ezstorage");
+        keybindBulkAction = new KeyBinding("key.unifiedstorage.bulk_action", Keyboard.KEY_SPACE, "key.categories.unifiedstorage");
         ClientRegistry.registerKeyBinding(keybindBulkAction);
 
-        keybindPickBlock = new KeyBinding("key.ezstorage.pick_block", Keyboard.CHAR_NONE, "key.categories.ezstorage");
+        keybindPickBlock = new KeyBinding("key.unifiedstorage.pick_block", Keyboard.CHAR_NONE, "key.categories.unifiedstorage");
         ClientRegistry.registerKeyBinding(keybindPickBlock);
     }
 

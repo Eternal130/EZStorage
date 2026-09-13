@@ -26,7 +26,7 @@ public class ItemBlockStorage extends ItemBlock {
             && itemBlockStorage.field_150939_a instanceof BlockStorage blockStorage) {
             tooltip.add(
                 StatCollector
-                    .translateToLocalFormatted("hud.msg.ezstorage.storage.capacity", blockStorage.getCapacity()));
+                    .translateToLocalFormatted("hud.msg.unifiedstorage.storage.capacity", blockStorage.getCapacity()));
         }
     }
 }

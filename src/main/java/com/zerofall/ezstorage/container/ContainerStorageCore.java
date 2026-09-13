@@ -124,7 +124,7 @@ public class ContainerStorageCore extends Container {
         if (missing != null) {
             GTNHLib.proxy.sendMessageAboveHotbar(
                 playerMP,
-                new ChatComponentTranslation("chat.msg.ezstorage.food.need_container", missing),
+                new ChatComponentTranslation("chat.msg.unifiedstorage.food.need_container", missing),
                 60,
                 true,
                 true);

@@ -40,7 +40,7 @@ import cpw.mods.fml.relauncher.Side;
     name = Reference.MOD_NAME,
     version = Tags.VERSION,
     acceptedMinecraftVersions = "[1.7.10]",
-    dependencies = "after:appliedenergistics2@[rv3-beta-695,);")
+    dependencies = "after:appliedenergistics2@[rv3-beta-695,);required-after:terrafirmacraftplus")
 public class EZStorage {
 
     @Mod.Instance(Reference.MOD_ID)
