@@ -48,4 +48,6 @@ hud.msg.ezstorage.amount_count=%s / %s
 tile.food_storage.name=Vorratskiste
 hud.msg.ezstorage.food.totalweight=Gesamt: %s oz / %s oz
 hud.msg.ezstorage.food.decay=Verderb: %s oz (%s%%)
+hud.msg.ezstorage.food.waila.content=Lebensmittel: %s
+hud.msg.ezstorage.food.waila.empty=Leer
 chat.msg.ezstorage.food.need_container=Benötigt: %s

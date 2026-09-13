@@ -16,6 +16,9 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
+import net.minecraft.network.NetworkManager;
+import net.minecraft.network.Packet;
+import net.minecraft.network.play.server.S35PacketUpdateTileEntity;
 import net.minecraft.world.World;
 
 import org.apache.logging.log4j.LogManager;
@@ -361,6 +364,11 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
         if (template == null) {
             template = stripVolatileKeys(is);
             decayTimer = Food.getDecayTimer(normalized);
+            // Template transition (empty -> food): resync clients so the TESR
+            // icon appears. Weight-only changes never resend the packet.
+            if (worldObj != null) {
+                worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
+            }
         }
 
         int[] taste = Food.getFoodTasteProfile(is);
@@ -499,6 +507,26 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
         onChange();
     }
 
+    /** True while the box holds any food (break protection + TESR gate). */
+    public boolean hasFood() {
+        return template != null && totalWeight > 0;
+    }
+
+    /** The identity template (client reads this after description-packet sync). */
+    public ItemStack getTemplateStack() {
+        return template;
+    }
+
+    /** Total stored weight in oz (Waila tooltip). */
+    public float getTotalWeightOz() {
+        return totalWeight;
+    }
+
+    /** Total absolute decay in oz (Waila tooltip; may be negative for fresh food). */
+    public float getTotalDecayOz() {
+        return totalDecay;
+    }
+
     /**
      * Builds the terminal display stack: identity template + aggregate
      * marker + baked weighted-average taste mods, with stackSize = total oz.
@@ -583,6 +611,11 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
             tasteSum[i] = 0;
         }
         decayTimer = (int) TFC_Time.getTotalHours();
+        // Template transition (food -> empty): resync clients so the TESR icon
+        // disappears. Weight-only decay ticks never resend the packet.
+        if (worldObj != null) {
+            worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
+        }
         onChange();
     }
 
@@ -943,7 +976,30 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
                         .getFloat("Taste");
                 }
             }
+        } else {
+            // Absent template key = empty aggregate (writeToNBT's invariant).
+            // Also covers the description packet sent by clearRot: without this
+            // reset a client TE would keep its stale template and the TESR icon
+            // would never disappear. On chunk load this is a no-op (fresh TE).
+            template = null;
+            totalWeight = 0;
+            totalDecay = 0;
+            for (int i = 0; i < tasteSum.length; i++) {
+                tasteSum[i] = 0;
+            }
         }
+    }
+
+    @Override
+    public void onDataPacket(NetworkManager net, S35PacketUpdateTileEntity pkt) {
+        readFromNBT(pkt.func_148857_g());
+    }
+
+    @Override
+    public Packet getDescriptionPacket() {
+        NBTTagCompound tag = new NBTTagCompound();
+        writeToNBT(tag);
+        return new S35PacketUpdateTileEntity(xCoord, yCoord, zCoord, getBlockMetadata(), tag);
     }
 
     /** Spills a rejected stack into the world as an EntityItem; never voids it. */

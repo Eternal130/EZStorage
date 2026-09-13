@@ -18,6 +18,7 @@ import com.zerofall.ezstorage.enums.OpenInvGuiSource;
 import com.zerofall.ezstorage.integration.ModIds;
 import com.zerofall.ezstorage.network.client.MsgPickBlockFromTerminal;
 import com.zerofall.ezstorage.network.client.MsgReqOpenInvGui;
+import com.zerofall.ezstorage.tileentity.TileEntityFoodStorage;
 import com.zerofall.ezstorage.tileentity.TileEntityStorageCore;
 import com.zerofall.ezstorage.util.EZInventory;
 import com.zerofall.ezstorage.util.EZInventoryManager;
@@ -64,6 +65,9 @@ public class EZEventHandler {
                 if (inventory != null && inventory.getTotalCount() > 0) {
                     e.setCanceled(true);
                 }
+            }
+            if (tileentity instanceof TileEntityFoodStorage foodTe && foodTe.hasFood()) {
+                e.setCanceled(true);
             }
         }
     }

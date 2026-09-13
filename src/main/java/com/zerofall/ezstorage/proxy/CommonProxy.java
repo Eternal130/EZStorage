@@ -12,6 +12,7 @@ import com.zerofall.ezstorage.integration.ModIds;
 
 import cpw.mods.fml.common.FMLCommonHandler;
 import cpw.mods.fml.common.event.FMLInitializationEvent;
+import cpw.mods.fml.common.event.FMLInterModComms;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
 
 public class CommonProxy {
@@ -44,6 +45,13 @@ public class CommonProxy {
 
         // Register integrations
         IntegrationUtils.init();
+
+        // Waila/WDMla: own provider for the food box (old-API compat path; the
+        // provider class is only loaded by the receiving tooltip mod)
+        FMLInterModComms.sendMessage(
+            "Waila",
+            "register",
+            "com.zerofall.ezstorage.integration.waila.FoodStorageWailaProvider.callbackRegister");
 
         // Set maxItemTypes
         if (EZConfiguration.maxItemTypesAutoMode) {
