@@ -6,7 +6,7 @@
 		"description": "A very simple storage system without energy or complex structures.",
 		"version": "${modVersion}",
 		"mcversion": "${minecraftVersion}",
-		"url": "https://github.com/Eternal130/EZStorage",
+		"url": "https://github.com/Eternal130/UnifiedStorage",
 		"updateUrl": "",
 		"authorList": ["zerofall", "Pilzinsel64"],
 		"credits": "",
