@@ -26,8 +26,6 @@ import org.apache.logging.log4j.Logger;
 
 import com.dunk.tfc.Core.TFC_Core;
 import com.dunk.tfc.Core.TFC_Time;
-import com.dunk.tfc.Food.ItemSalad;
-import com.dunk.tfc.Food.ItemSandwich;
 import com.dunk.tfc.api.Food;
 import com.dunk.tfc.api.Interfaces.IFood;
 import com.dunk.tfc.api.TFCItems;
@@ -664,7 +662,6 @@ public class TileEntityFoodStorage extends TileEntityMultiblock implements IInve
 
     /** True when the item can never be knife-split past the cap. */
     private static boolean isNoSplit(ItemStack is) {
-        if (is.getItem() instanceof ItemSandwich || is.getItem() instanceof ItemSalad) return true;
         return parsedNoSplitItems().contains(is.getItem());
     }
 

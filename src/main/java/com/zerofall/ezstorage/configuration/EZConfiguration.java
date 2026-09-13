@@ -81,12 +81,12 @@ public class EZConfiguration {
     @Config.DefaultBoolean(false)
     public static boolean allowHopperContainerFood;
 
-    @Config.Comment("Items that can never be knife-split when inserted into a food storage box past its cap. Format: modid:itemname per entry. Unknown entries are logged and ignored. Sandwiches and salads are always non-splittable.")
-    @Config.DefaultStringList({})
+    @Config.Comment("Items that can never be knife-split when inserted into a food storage box past its cap. Format: modid:itemname per entry. Unknown entries are logged and ignored. Defaults to the TFC sandwich and salad.")
+    @Config.DefaultStringList({"terrafirmacraftplus:Sandwich", "terrafirmacraftplus:Salad"})
     public static String[] foodNoSplitBlacklist;
 
-    @Config.Comment("Per-item extract portion cap overrides in oz. Format: modid:itemname=oz per entry. Unknown entries are logged and ignored. Default caps come from each food's own max weight (sandwich 10, salad 20, soup 24, meal 20, plain 160).")
-    @Config.DefaultStringList({})
+    @Config.Comment("Per-item extract portion cap overrides in oz. Format: modid:itemname=oz per entry. Unknown entries are logged and ignored. Defaults to the TFC sandwich (10) and salad (20); any food not listed falls back to its own max weight (soups/meals 20, plain food 160).")
+    @Config.DefaultStringList({"terrafirmacraftplus:Sandwich=10", "terrafirmacraftplus:Salad=20"})
     public static String[] foodExtractCapOverrides;
 
     public static void init() {

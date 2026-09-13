@@ -37,8 +37,8 @@ Unified Storage (former Simple storage) introduces an early-game storage system 
   - Stored food keeps decaying based on environment temperature (identical math to a TFC chest, including offline catch-up); fully rotted contents are cleared automatically
   - Terminal integration: the entry shows total oz (badge) and TFC-style weight/decay bars; left click extracts 160 oz, right click 80 oz, the bulk key a full portion; less than the target extracts the remainder
   - Taste of extracted food is rewritten to the stored weighted average; the tooltip tiers it by the observer's cooking skill, exactly like regular TFC food
-  - Per-food extraction caps (sandwiches 10 oz, salads 20 oz, soups 24 oz, meals 20 oz, plain food 160 oz), overridable per item via config
-  - Optional storage cap (oz, config; unlimited by default): over-cap inserts are knife-split when any knife is stored in the system — the fitting part is absorbed and the rest returned; minimum split is 1 oz, and non-splittable foods (sandwiches, salads, plus a configurable blacklist) are rejected whole
+  - Per-food extraction caps: config defaults prefilled with the TFC sandwich (10 oz) and salad (20 oz); any unlisted food falls back to its own max weight (meals 20 oz, plain food 160 oz), all overridable per item via config
+  - Optional storage cap (oz, config; unlimited by default): over-cap inserts are knife-split when any knife is stored in the system — the fitting part is absorbed and the rest returned; minimum split is 1 oz, and non-splittable foods (configurable no-split blacklist, defaulting to the TFC sandwich and salad) are rejected whole
   - Container foods (salads): the container is stripped into system storage on insert and consumed back from it on extract; extraction is blocked with a "requires: ..." hint while the container is unavailable
   - Hot food cools to ambient on insert; smoke progress resets (completed smokes are unaffected)
   - The stored food is rendered flat on the box's faces; Waila/WDMla shows contents, weight and decay
